@@ -140,7 +140,7 @@ CMD="$BIN_DIR/sidecar-keeper"
 if [ "$LINK" -eq 1 ]; then
   for d in "$HOME/.local/bin" "$HOME/bin" /opt/homebrew/bin /usr/local/bin; do
     case ":$PATH:" in *":$d:"*) ;; *) continue ;; esac
-    [ -d "$d" ] && [ -w "$d" ] || continue
+    if [ ! -d "$d" ] || [ ! -w "$d" ]; then continue; fi
     if [ -L "$d/sidecar-keeper" ] && [ "$(readlink "$d/sidecar-keeper")" != "$BIN_DIR/sidecar-keeper" ]; then
       echo "note: $d/sidecar-keeper belongs to something else, left alone" >&2; continue
     fi
