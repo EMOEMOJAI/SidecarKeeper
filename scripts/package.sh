@@ -11,7 +11,7 @@ MIN_MACOS=14.2
 VERSION="$(sed -n 's/^let version = "\(.*\)"$/\1/p' Sources/SidecarKeeper/main.swift)"
 # shellcheck disable=SC2016  # the ${...} is literal text being matched, not an expansion
 REF="$(sed -n 's/^UPSTREAM_REF="${SIDECARLAUNCHER_REF:-\([0-9a-f]\{40\}\)}"$/\1/p' install.sh)"
-[ -n "$VERSION" ] && [ -n "$REF" ] || { echo "could not read version or upstream ref" >&2; exit 1; }
+if [ -z "$VERSION" ] || [ -z "$REF" ]; then echo "could not read version or upstream ref" >&2; exit 1; fi
 case "$VERSION" in *[!0-9.]*) echo "version must be digits and dots, got: $VERSION" >&2; exit 1 ;; esac
 echo "==> SidecarKeeper $VERSION, SidecarLauncher ${REF:0:12}, macOS $MIN_MACOS+, arm64 + x86_64"
 

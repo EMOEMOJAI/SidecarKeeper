@@ -110,7 +110,7 @@ if [ "$MODE" = bootstrap ]; then
     want="$(fetch "$url.sha256" | awk '{print $1}')" || die "could not fetch the checksum"
   fi
   got="$(shasum -a 256 "$BUILD_DIR/bundle.tar.gz" | awk '{print $1}')"
-  [ -n "$want" ] && [ "$got" = "$want" ] || die "checksum mismatch: expected ${want:-<none>}, got $got"
+  if [ -z "$want" ] || [ "$got" != "$want" ]; then die "checksum mismatch: expected ${want:-<none>}, got $got"; fi
   echo "    sha256 ok"
   tar -xzf "$BUILD_DIR/bundle.tar.gz" -C "$BUILD_DIR"
   [ -f "$BUILD_DIR/SidecarKeeper/install.sh" ] || die "unexpected bundle layout"
