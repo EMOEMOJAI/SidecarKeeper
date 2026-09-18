@@ -2,6 +2,12 @@
 
 # SidecarKeeper
 
+<p align="center">
+  <a href="https://github.com/EMOEMOJAI/SidecarKeeper/actions/workflows/ci.yml"><img src="https://github.com/EMOEMOJAI/SidecarKeeper/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT license"></a>
+  <img src="https://img.shields.io/badge/macOS-14.2%2B-black.svg" alt="macOS 14.2 or newer">
+</p>
+
 Keeps [Sidecar](https://support.apple.com/en-us/102597) connected from your Mac to your iPad,
 automatically and quietly. When the session drops (display sleep, lock, lid close, iPad
 walked out of range) it reconnects as soon as macOS is able to, without the stream of
@@ -197,8 +203,10 @@ make test    # 37 behaviour tests against a fake SidecarLauncher, no iPad needed
 make check   # build + test + bash -n + shellcheck + plist lint; run before pushing
 ```
 
-There is no CI because the project only builds on macOS. The tests run the real watcher
-binary, so its real gates apply: run them with the screen unlocked and the lid open.
+CI runs on GitHub-hosted runners for every push and pull request: the same build and
+tests on macOS 14, 15 and 26, a real install and uninstall on each, and shellcheck on
+Linux. The tests run the real watcher binary, so its real gates apply: locally, run them
+with the screen unlocked and the lid open.
 `SIDECARLAUNCHER_REF=<full 40-character sha> ./install.sh` builds a different upstream commit.
 
 The icon, favicon and social preview are hand-written SVG in `assets/`. After editing

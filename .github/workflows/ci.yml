@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint scripts
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: shellcheck
+        run: shellcheck install.sh uninstall.sh tests/*.sh assets/render.sh
+      - name: bash syntax
+        run: bash -n install.sh uninstall.sh tests/run.sh tests/fake-launcher.sh assets/render.sh
+
+  macos:
+    name: Build and test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, macos-15, macos-26]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Toolchain
+        run: |
+          sw_vers
+          swiftc --version
+      - name: Build (warnings are errors)
+        run: |
+          mkdir -p build
+          swiftc -O -warnings-as-errors -framework AppKit Sources/SidecarKeeper/main.swift -o build/sidecar-keeper
+          build/sidecar-keeper --version
+      - name: Behaviour tests
+        # SK_TESTS_NO_SKIP: a locked session must fail the job instead of skipping it.
+        run: SK_TESTS_NO_SKIP=1 tests/run.sh build/sidecar-keeper
+      - name: Lint LaunchAgent template
+        run: plutil -lint launchd/com.sidecarkeeper.plist.template
+      - name: Install and uninstall for real
+        # Builds the pinned upstream SidecarLauncher, loads the LaunchAgent, then removes it all.
+        # No iPad exists here, so the watcher must start and sit idle without attempting a connect.
+        run: |
+          prefix="$RUNNER_TEMP/sidecarkeeper"
+          ./install.sh --device "CI iPad" --no-link --prefix "$prefix"
+          sleep 6
+          "$prefix/bin/sidecar-keeper" status
+          grep -q "watcher .* started" "$HOME/Library/Logs/sidecar-keeper.log"
+          if grep -q "fail:" "$HOME/Library/Logs/sidecar-keeper.log"; then echo "watcher attempted a connect"; exit 1; fi
+          plutil -lint "$HOME/Library/LaunchAgents/com.sidecarkeeper.agent.plist"
+          ./uninstall.sh --prefix "$prefix" --purge-logs
+          test ! -e "$prefix"
+          test ! -e "$HOME/Library/LaunchAgents/com.sidecarkeeper.agent.plist"
