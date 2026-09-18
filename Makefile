@@ -2,7 +2,7 @@
 SWIFTC ?= swiftc
 BUILD  ?= build
 
-.PHONY: build test check install uninstall clean
+.PHONY: build test check package install uninstall clean
 
 build: $(BUILD)/sidecar-keeper
 
@@ -16,9 +16,13 @@ test: build
 
 # Run before every push.
 check: build test
-	bash -n install.sh uninstall.sh tests/run.sh tests/fake-launcher.sh assets/render.sh
-	@if command -v shellcheck >/dev/null; then shellcheck install.sh uninstall.sh tests/*.sh assets/render.sh && echo "shellcheck ok"; else echo "shellcheck not installed, skipped"; fi
+	bash -n install.sh uninstall.sh tests/run.sh tests/fake-launcher.sh assets/render.sh scripts/package.sh
+	@if command -v shellcheck >/dev/null; then shellcheck -S style install.sh uninstall.sh tests/*.sh assets/render.sh scripts/package.sh && echo "shellcheck ok"; else echo "shellcheck not installed, skipped"; fi
 	@plutil -lint launchd/com.sidecarkeeper.plist.template >/dev/null && echo "template ok"
+
+# Release bundle with prebuilt universal binaries, in dist/.
+package:
+	scripts/package.sh
 
 install:
 	./install.sh $(INSTALL_ARGS)
@@ -27,4 +31,4 @@ uninstall:
 	./uninstall.sh
 
 clean:
-	rm -rf $(BUILD)
+	rm -rf $(BUILD) dist

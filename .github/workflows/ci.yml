@@ -23,9 +23,9 @@ jobs:
         with:
           persist-credentials: false
       - name: shellcheck
-        run: shellcheck install.sh uninstall.sh tests/*.sh assets/render.sh
+        run: shellcheck -S style install.sh uninstall.sh tests/*.sh assets/render.sh scripts/package.sh
       - name: bash syntax
-        run: bash -n install.sh uninstall.sh tests/run.sh tests/fake-launcher.sh assets/render.sh
+        run: bash -n install.sh uninstall.sh tests/run.sh tests/fake-launcher.sh assets/render.sh scripts/package.sh
 
   macos:
     name: Build and test (${{ matrix.os }})
@@ -67,3 +67,17 @@ jobs:
           ./uninstall.sh --prefix "$prefix" --purge-logs
           test ! -e "$prefix"
           test ! -e "$HOME/Library/LaunchAgents/com.sidecarkeeper.agent.plist"
+      - name: Package a release bundle and install from it without developer tools
+        run: |
+          scripts/package.sh
+          (cd dist && shasum -a 256 -c SidecarKeeper.tar.gz.sha256)
+          mkdir "$RUNNER_TEMP/poison" "$RUNNER_TEMP/unpacked"
+          for t in swiftc git xcodebuild; do printf '#!/bin/sh\necho "%s was called" >&2; exit 99\n' "$t" > "$RUNNER_TEMP/poison/$t"; chmod +x "$RUNNER_TEMP/poison/$t"; done
+          tar -xzf dist/SidecarKeeper.tar.gz -C "$RUNNER_TEMP/unpacked"
+          if tar -tvzf dist/SidecarKeeper.tar.gz | grep -v " root " ; then echo "archive records a non-root owner"; exit 1; fi
+          prefix="$RUNNER_TEMP/sidecarkeeper-bundle"
+          PATH="$RUNNER_TEMP/poison:$PATH" bash "$RUNNER_TEMP/unpacked/SidecarKeeper/install.sh" --device "CI iPad" --no-link --prefix "$prefix"
+          sleep 5
+          "$prefix/bin/sidecar-keeper" status
+          bash "$prefix/uninstall.sh" --purge-logs
+          test ! -e "$prefix"

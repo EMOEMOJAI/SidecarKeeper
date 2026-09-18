@@ -2,6 +2,9 @@
 
 # SidecarKeeper
 
+**Auto-reconnect Apple Sidecar on macOS.** Keep your iPad working as a second display: when
+Sidecar disconnects after sleep, lock or a lid close, SidecarKeeper brings it back by itself.
+
 <p align="center">
   <a href="https://github.com/EMOEMOJAI/SidecarKeeper/actions/workflows/ci.yml"><img src="https://github.com/EMOEMOJAI/SidecarKeeper/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT license"></a>
@@ -17,7 +20,30 @@ Built on [Ocasio-J/SidecarLauncher](https://github.com/Ocasio-J/SidecarLauncher)
 tiny CLI that drives Apple's private `SidecarCore` framework. SidecarKeeper adds a
 LaunchAgent that decides *when* it is safe to call it.
 
-Tested on macOS 27.0 on Apple silicon with an iPad over USB.
+Tested on macOS 27.0 on Apple silicon with an iPad over USB. CI builds and tests it on
+macOS 14, 15 and 26.
+
+## Quick start
+
+Unlock your iPad, then paste this into Terminal:
+
+```sh
+/bin/bash -c "$(curl -fsSL https://github.com/EMOEMOJAI/SidecarKeeper/releases/latest/download/install.sh)"
+```
+
+That is the whole install. It needs nothing but macOS: no Xcode, no git, no `sudo`. It
+starts at login and needs no further attention. Other ways to install, and what the command
+does, are under [Install](#install).
+
+## Why this exists
+
+Sidecar is great until the display sleeps. macOS drops the session whenever the built-in
+display turns off, and it never reconnects by itself. The obvious fix, a script that calls
+"connect" in a loop, makes things worse: while the screen is locked or the lid is closed the
+connect cannot succeed, and **every failed attempt raises an "Unable to connect to iPad"
+notification**. Leave that running overnight and you wake up to a hundred of them.
+
+SidecarKeeper only tries when a connect can actually work, and backs off when it does not.
 
 ## How it works
 
@@ -51,15 +77,39 @@ locked or with the lid closed, no attempts when the iPad is out of range.
 
 ## Prerequisites
 
-- macOS 14.2 or newer on Apple silicon or Intel. Sidecar itself must already work
+- macOS 14.2 or newer. Tested on Apple silicon; Intel is expected to work but untested. Sidecar itself must already work
   between the two devices (same Apple ID, Wi-Fi and Bluetooth on, or a USB cable).
-- Xcode Command Line Tools (`xcode-select --install`) for `swiftc`, plus `git`.
+- Nothing else for the release install. Building from source needs the Xcode Command Line
+  Tools and git.
 - The iPad must be unlocked for a connect to succeed. A locked or sleeping iPad still
   shows up in `devices` but returns `SidecarErrorDeviceWiFiNotEnabled` (-203); the
   watcher backs off and retries.
 - USB is recommended: a wired iPad stays reachable and reconnects faster.
 
 ## Install
+
+Unlock the iPad first so it shows up. There are three ways, and all end in the same place.
+
+**1. One line (recommended).** Downloads the latest release, verifies its SHA-256, and
+installs the prebuilt binaries. Nothing else is required.
+
+```sh
+/bin/bash -c "$(curl -fsSL https://github.com/EMOEMOJAI/SidecarKeeper/releases/latest/download/install.sh)"
+```
+
+Pass options after a placeholder name, for example `... install.sh)" sk --device "My iPad"`.
+If you would rather read a script before running it, download `install.sh` from the
+[latest release](https://github.com/EMOEMOJAI/SidecarKeeper/releases/latest) first. It is
+short.
+
+**2. Download the release.** Get `SidecarKeeper.tar.gz` from the
+[latest release](https://github.com/EMOEMOJAI/SidecarKeeper/releases/latest), unpack it,
+open Terminal, drag `install.sh` into the window and press Return. The installer clears the
+quarantine flag that macOS puts on browser downloads, which is why it has to be started from
+Terminal and not by double-clicking.
+
+**3. Build from source.** Needs the Xcode Command Line Tools (`xcode-select --install`) and
+git.
 
 ```sh
 git clone https://github.com/EMOEMOJAI/SidecarKeeper.git
@@ -69,12 +119,18 @@ cd SidecarKeeper
 ./install.sh --wired              # cable only, see "Wired mode" below
 ```
 
-Unlock the iPad first so it shows up. The installer builds SidecarLauncher from source at a
-pinned upstream commit, builds `sidecar-keeper`, ad-hoc codesigns both, installs them to
-`~/.sidecarkeeper/bin`, writes `~/Library/LaunchAgents/com.sidecarkeeper.agent.plist` and
-starts it. If a user-writable directory such as `/opt/homebrew/bin` is on your `PATH`, it
-also links the `sidecar-keeper` command there (`--no-link` to skip). Nothing needs `sudo`,
-and re-running the installer is the way to update or change the device.
+Every route installs two small binaries to `~/.sidecarkeeper/bin`, writes
+`~/Library/LaunchAgents/com.sidecarkeeper.agent.plist` and starts it. If a user-writable
+directory such as `/opt/homebrew/bin` is on your `PATH`, the `sidecar-keeper` command is
+linked there (`--no-link` to skip). Nothing needs `sudo`, and running the installer again
+is the way to update or change the device.
+
+Release binaries are universal (Apple silicon and Intel), built by GitHub Actions from the
+tagged source, and not notarized, because that requires a paid Apple developer account.
+You can check where they came from with
+`gh attestation verify SidecarKeeper.tar.gz --repo EMOEMOJAI/SidecarKeeper`. When building
+from source, [SidecarLauncher](https://github.com/Ocasio-J/SidecarLauncher) is fetched at a
+pinned commit and compiled locally.
 
 Then optionally keep the Mac awake with the lid closed while on AC power:
 
@@ -101,8 +157,8 @@ reconnects within about 15 s. If the command is not on your `PATH`, use
 ## Uninstall
 
 ```sh
-./uninstall.sh              # stops the agent, removes plist and ~/.sidecarkeeper
-./uninstall.sh --purge-logs # also removes the log files
+~/.sidecarkeeper/uninstall.sh              # stops the agent, removes plist and ~/.sidecarkeeper
+~/.sidecarkeeper/uninstall.sh --purge-logs # also removes the log files
 ```
 
 Both scripts accept `--prefix DIR` (or `SIDECARKEEPER_PREFIX`) to use a different install
@@ -177,9 +233,63 @@ Start with `sidecar-keeper status`. What the log lines mean:
 | `fail: ... WiFiNotEnabled` (-203) | The iPad is locked or asleep | Unlock the iPad |
 | `fail: ... VirtualDisplay` (-500/-501) | Display stack is busy, or the lid is closed | Wait, it retries in 5 min or on the next wake/unlock |
 | `fail: timeout after 30s` | SidecarLauncher hung | Usually clears by itself; otherwise toggle Sidecar once in Control Centre |
-| `cannot run launcher ...` | SidecarLauncher binary is missing | Re-run `./install.sh` |
+| `cannot run launcher ...` | SidecarLauncher binary is missing | Run the installer again |
 
-After a macOS update breaks things, re-run `./install.sh` to rebuild both binaries.
+If a macOS update breaks things, run the installer again, and check for a newer release.
+
+## FAQ
+
+**Sidecar keeps disconnecting when my Mac sleeps or locks. Does this fix it?**
+It fixes the part that can be fixed. macOS always drops Sidecar when the built-in display
+turns off, and nothing can prevent that. SidecarKeeper reconnects automatically within a
+few seconds of the display coming back, so you never reconnect by hand.
+
+**How do I automatically connect my iPad as a second display at login?**
+Install SidecarKeeper. Its LaunchAgent starts at login and connects as soon as the iPad is
+reachable and unlocked.
+
+**Can I use Sidecar with the MacBook lid closed (clamshell mode)?**
+No. macOS cannot create the Sidecar virtual display while the built-in display is off
+(error -501). This is an Apple limitation that no tool can work around. SidecarKeeper
+waits quietly and reconnects when you open the lid.
+
+**How do I stop the "Unable to connect to iPad" notifications?**
+Those come from connect attempts that were never going to succeed. SidecarKeeper checks
+screen, lock, lid and device state first, and backs off from 30 seconds to 5 minutes after
+a real failure, so the notifications stop.
+
+**How is this different from SidecarLauncher, a Shortcut, or an AppleScript?**
+[SidecarLauncher](https://github.com/Ocasio-J/SidecarLauncher) connects once when you run
+it, and SidecarKeeper uses it for exactly that. Shortcuts and AppleScript click through
+Control Centre and break with macOS updates. None of them watch the session or know when
+a connect is safe to try. SidecarKeeper is the always-on layer that decides when to call
+connect.
+
+**Does it work over USB, or Wi-Fi only?**
+Both. By default macOS picks the transport. `./install.sh --wired` forces the cable, see
+[Wired mode](#wired-mode-experimental).
+
+**I disconnected on purpose and it reconnected. How do I stop that?**
+Run `sidecar-keeper pause`, and `sidecar-keeper resume` when you want it back.
+
+**Do I need Xcode or any developer tools?**
+No. The release install needs only macOS. Developer tools are needed only if you choose to
+build from source.
+
+**Does it need admin rights, a kernel extension, or accessibility permission?**
+No. It is a per-user LaunchAgent and two small binaries in `~/.sidecarkeeper`. It never
+asks for `sudo` and needs no privacy permissions.
+
+**Is it safe? It uses a private Apple framework.**
+It calls the same `SidecarCore` framework that Control Centre uses, through
+SidecarLauncher, built from source at a pinned commit on your own machine. Apple may change
+that framework in any update. If that happens, connects fail and get logged, and nothing
+else on your Mac is affected.
+
+**Which macOS and iPad versions are supported?**
+macOS 14.2 or newer. It is tested on Apple silicon. Intel Macs should work, since nothing
+in it is architecture-specific, but that is untested. Any iPad that already works with
+Sidecar on your Mac.
 
 ## Limitations
 
@@ -201,11 +311,14 @@ After a macOS update breaks things, re-run `./install.sh` to rebuild both binari
 make build   # build/sidecar-keeper
 make test    # 43 behaviour tests against a fake SidecarLauncher, no iPad needed (~40 s)
 make check   # build + test + bash -n + shellcheck + plist lint; run before pushing
+make package # release bundle with universal binaries, in dist/
 ```
 
 CI runs on GitHub-hosted runners for every push and pull request: the same build and
-tests on macOS 14, 15 and 26, a real install and uninstall on each, and shellcheck on
-Linux. The tests run the real watcher binary, so its real gates apply: locally, run them
+tests on macOS 14, 15 and 26, a real install and uninstall on each (from source and from a
+release bundle with the compiler disabled), and shellcheck on Linux. Pushing a `v*` tag
+runs the release workflow, which builds the bundle, installs it on all three macOS
+versions, and only then publishes it. The tests run the real watcher binary, so its real gates apply: locally, run them
 with the screen unlocked and the lid open.
 `SIDECARLAUNCHER_REF=<full 40-character sha> ./install.sh` builds a different upstream commit.
 

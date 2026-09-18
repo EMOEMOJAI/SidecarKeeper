@@ -13,7 +13,7 @@
 import AppKit
 import Foundation
 
-let version = "1.1.1"
+let version = "1.2.0"
 let agentLabel = "com.sidecarkeeper.agent"
 
 // MARK: - Configuration

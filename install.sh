@@ -1,12 +1,22 @@
 #!/bin/bash
-# SidecarKeeper installer: builds SidecarLauncher (upstream, MIT) and sidecar-keeper,
-# installs both under ~/.sidecarkeeper/bin and loads a per-user LaunchAgent.
+# SidecarKeeper installer. Installs sidecar-keeper and SidecarLauncher (upstream, MIT) under
+# ~/.sidecarkeeper/bin and loads a per-user LaunchAgent. Never needs sudo. Safe to re-run.
 #
-#   ./install.sh [--device "My iPad"] [--wired] [--prefix DIR] [--no-link]
-#
-# Requires macOS with the Xcode Command Line Tools (swiftc) and git. Never needs sudo.
-# Safe to re-run: it rebuilds, replaces the binaries and restarts the agent.
+# It works three ways, chosen automatically:
+#   release bundle   run from an unpacked release: installs the prebuilt universal binaries.
+#                    Needs nothing but macOS.
+#   one-liner        run with no files beside it (bash -c "$(curl ...)"): downloads the release
+#                    bundle, verifies its SHA-256, and runs the installer inside it.
+#   source checkout  run from a git clone: builds both binaries with swiftc. Needs the Xcode
+#                    Command Line Tools and git.
 set -euo pipefail
+
+ORIG_ARGS=("$@")
+# Filled in by the release workflow in the install.sh attached to a release, so that the
+# one-liner fetches exactly that release and checks it against a hash it carries itself.
+BUNDLE_VERSION=""
+BUNDLE_SHA256=""
+RELEASES="https://github.com/EMOEMOJAI/SidecarKeeper/releases"
 
 UPSTREAM_REPO="https://github.com/Ocasio-J/SidecarLauncher.git"
 # Pinned so an install always builds code that was reviewed. Override to test a newer upstream.
@@ -21,7 +31,16 @@ DEVICE=""
 LINK=1
 WIRED=0
 
-usage() { sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() {
+  cat <<'USAGE'
+usage: install.sh [--device "My iPad"] [--wired] [--prefix DIR] [--no-link]
+
+  --device NAME   iPad to keep connected. Default: the only reachable one, or ask.
+  --wired         Experimental: connect over the USB cable only.
+  --prefix DIR    Install directory. Default: ~/.sidecarkeeper
+  --no-link       Do not link the sidecar-keeper command onto PATH.
+USAGE
+}
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -48,12 +67,23 @@ if [ -e "$PREFIX" ] && [ ! -f "$PREFIX/.sidecarkeeper" ] && [ -n "$(ls -A "$PREF
 fi
 [ "$(uname -s)" = Darwin ] || die "SidecarKeeper only runs on macOS"
 [ "$(id -u)" -ne 0 ] || die "run as your normal user, not with sudo: the LaunchAgent is per-user"
-command -v git >/dev/null || die "git not found"
-if ! command -v swiftc >/dev/null || ! xcode-select -p >/dev/null 2>&1; then
-  die "swiftc not found; install the Command Line Tools: xcode-select --install"
+
+# Work out how we were started. Under `bash -c "$(curl ...)"` there is no script file at all.
+SELF="${BASH_SOURCE[0]:-}"
+REPO_DIR=""
+if [ -n "$SELF" ] && [ -f "$SELF" ]; then REPO_DIR="$(cd "$(dirname "$SELF")" && pwd)"; fi
+if [ -n "$REPO_DIR" ] && [ -x "$REPO_DIR/bin/sidecar-keeper" ] && [ -x "$REPO_DIR/bin/SidecarLauncher" ]; then
+  MODE=bundle
+elif [ -n "$REPO_DIR" ] && [ -f "$REPO_DIR/Sources/SidecarKeeper/main.swift" ]; then
+  MODE=source
+  command -v git >/dev/null || die "git not found"
+  if ! command -v swiftc >/dev/null || ! xcode-select -p >/dev/null 2>&1; then
+    die "swiftc not found. Install the Command Line Tools (xcode-select --install), or use the prebuilt release: $RELEASES/latest"
+  fi
+else
+  MODE=bootstrap
 fi
 
-REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 BIN_DIR="$PREFIX/bin"
 LOG_DIR="$HOME/Library/Logs"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
@@ -61,6 +91,31 @@ TMP="${TMPDIR:-/tmp}"
 BUILD_DIR="$(mktemp -d "${TMP%/}/sidecarkeeper.XXXXXX")"
 trap 'rm -rf "$BUILD_DIR"' EXIT
 
+if [ "$MODE" = bootstrap ]; then
+  if [ -n "$BUNDLE_VERSION" ]; then url="$RELEASES/download/v$BUNDLE_VERSION/SidecarKeeper.tar.gz"
+  else url="$RELEASES/latest/download/SidecarKeeper.tar.gz"; fi
+  echo "==> Downloading ${BUNDLE_VERSION:+v$BUNDLE_VERSION }release bundle"
+  fetch() { curl -fsSL --proto '=https' --tlsv1.2 --retry 2 "$1"; }
+  fetch "$url" > "$BUILD_DIR/bundle.tar.gz" || die "download failed: $url"
+  want="$BUNDLE_SHA256"
+  if [ -z "$want" ]; then want="$(fetch "$url.sha256" | awk '{print $1}')" || die "could not fetch the checksum"; fi
+  got="$(shasum -a 256 "$BUILD_DIR/bundle.tar.gz" | awk '{print $1}')"
+  [ -n "$want" ] && [ "$got" = "$want" ] || die "checksum mismatch: expected ${want:-<none>}, got $got"
+  echo "    sha256 ok"
+  tar -xzf "$BUILD_DIR/bundle.tar.gz" -C "$BUILD_DIR"
+  [ -f "$BUILD_DIR/SidecarKeeper/install.sh" ] || die "unexpected bundle layout"
+  # Bash 3.2 (the macOS default) treats an empty array as unset under `set -u`.
+  bash "$BUILD_DIR/SidecarKeeper/install.sh" ${ORIG_ARGS[@]+"${ORIG_ARGS[@]}"}
+  exit $?
+fi
+
+if [ "$MODE" = bundle ]; then
+  echo "==> Using the prebuilt binaries in $REPO_DIR/bin"
+  cp "$REPO_DIR/bin/SidecarLauncher" "$BUILD_DIR/SidecarLauncher.bin"
+  cp "$REPO_DIR/bin/sidecar-keeper" "$BUILD_DIR/sidecar-keeper"
+  # A browser download is quarantined, and macOS refuses to run quarantined unsigned binaries.
+  xattr -d com.apple.quarantine "$BUILD_DIR/SidecarLauncher.bin" "$BUILD_DIR/sidecar-keeper" 2>/dev/null || true
+else
 echo "==> Building SidecarLauncher (${UPSTREAM_REF:0:12})"
 git init -q "$BUILD_DIR/SidecarLauncher"
 git -C "$BUILD_DIR/SidecarLauncher" fetch -q --depth 1 "$UPSTREAM_REPO" "$UPSTREAM_REF" \
@@ -73,6 +128,7 @@ swiftc -O -framework AppKit "$REPO_DIR/Sources/SidecarKeeper/main.swift" -o "$BU
 
 codesign -s - -f "$BUILD_DIR/SidecarLauncher.bin" "$BUILD_DIR/sidecar-keeper" >/dev/null 2>&1 \
   || echo "warning: ad-hoc codesign failed; continuing with unsigned binaries" >&2
+fi
 
 echo "==> Looking for reachable Sidecar devices"
 DEVICES="$("$BUILD_DIR/SidecarLauncher.bin" devices 2>/dev/null | grep -v '^No sidecar capable devices detected$' || true)"
@@ -118,6 +174,8 @@ install -m 755 "$BUILD_DIR/SidecarLauncher.bin" "$BIN_DIR/SidecarLauncher"
 install -m 755 "$BUILD_DIR/sidecar-keeper" "$BIN_DIR/sidecar-keeper"
 # Marker that uninstall.sh requires before it will delete this directory.
 echo "SidecarKeeper install directory. Removed by uninstall.sh." > "$PREFIX/.sidecarkeeper"
+# Keep the uninstaller with the install, so it is there after a release bundle is deleted.
+install -m 755 "$REPO_DIR/uninstall.sh" "$PREFIX/uninstall.sh"
 
 echo "==> Writing LaunchAgent $PLIST"
 # Every value is escaped for XML, then for the sed replacement (\, & and the | delimiter).
@@ -161,7 +219,7 @@ SidecarKeeper is running for "$DEVICE"$( [ "$WIRED" -eq 1 ] && echo " (wired onl
   $CMD pause      stop reconnecting (when you disconnect Sidecar on purpose)
   $CMD resume     start again
   tail -f $LOG_DIR/sidecar-keeper.log
-  $REPO_DIR/uninstall.sh
+  $PREFIX/uninstall.sh
 
 Optional: keep the Mac awake with the lid closed on AC power (Sidecar still
 drops while the lid is closed, but reconnects as soon as it is opened):
