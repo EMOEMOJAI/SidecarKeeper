@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.1
+
+- `sidecar-keeper status` recognises an agent started by `brew services`, names which
+  agent is loaded, and warns when two watchers are loaded at once.
+- Homebrew: `brew install emoemojai/tap/sidecarkeeper`.
+
 ## 1.2.0
 
 - Prebuilt releases. A release now ships universal binaries for Apple silicon and Intel, so

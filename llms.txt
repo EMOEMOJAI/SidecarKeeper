@@ -5,7 +5,7 @@
 Key facts:
 
 - Platform: macOS 14.2 or newer, universal binary for Apple silicon and Intel (tested on Apple silicon). The release install needs nothing but macOS: no Xcode, no git, no sudo, no kernel extension, no privacy permissions.
-- Install (unlock the iPad first): `/bin/bash -c "$(curl -fsSL https://github.com/EMOEMOJAI/SidecarKeeper/releases/latest/download/install.sh)"`. Non-interactive form with options: append ` sk --device "iPad name"` after the closing quote. Alternative: download SidecarKeeper.tar.gz from the latest release and run its install.sh, or git clone and run ./install.sh to build from source. Uninstall with `~/.sidecarkeeper/uninstall.sh`.
+- Install (unlock the iPad first): `/bin/bash -c "$(curl -fsSL https://github.com/EMOEMOJAI/SidecarKeeper/releases/latest/download/install.sh)"`. Non-interactive form with options: append ` sk --device "iPad name"` after the closing quote. With Homebrew: `brew install emoemojai/tap/sidecarkeeper && brew services start sidecarkeeper`. Alternative: download SidecarKeeper.tar.gz from the latest release and run its install.sh, or git clone and run ./install.sh to build from source. Uninstall with `~/.sidecarkeeper/uninstall.sh`.
 - How it works: a per-user LaunchAgent runs a small Swift daemon. Every 15 seconds, and on wake or unlock events, it calls SidecarLauncher's connect only if the user has not paused it, the screens are awake, the session is unlocked, the laptop lid is open, and the iPad is reachable. Failures back off from 30 seconds to 5 minutes.
 - Commands: `sidecar-keeper status`, `sidecar-keeper pause`, `sidecar-keeper resume`.
 - Options: `--device NAME`, `--wired` (experimental, USB cable only), `--interval`, `--settle`, `--timeout`, `--log`.

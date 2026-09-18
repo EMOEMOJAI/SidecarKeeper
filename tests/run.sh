@@ -128,6 +128,19 @@ unplug; watch new 2 --wired --usb-match "keyboard"
 argv_is "--usb-match picks the product name, ignoring case" "connect Other iPad -wired"
 plug
 
+echo "status finds whichever agent is loaded"
+LOG=""; CALLS=""
+out="$(SIDECARKEEPER_AGENT_LABELS="com.example.definitely-not-loaded" "$BIN" status --log "$WORK/log")"
+if grep -q "^agent:  not loaded$" <<<"$out"; then ok "no agent: not loaded"; else bad "no agent: not loaded (got: $(head -1 <<<"$out"))"; fi
+# Any agent that is really loaded in this session stands in for ours.
+some="$(launchctl list 2>/dev/null | awk 'NR>1 && $3 ~ /^com\.apple\.[A-Za-z0-9.]+$/ {print $3; exit}')"
+if [ -n "$some" ] && launchctl print "gui/$(id -u)/$some" 2>/dev/null | grep -q "state ="; then
+  out="$(SIDECARKEEPER_AGENT_LABELS="com.example.nope,$some" "$BIN" status --log "$WORK/log")"
+  if grep -qF "($some)" <<<"$(head -1 <<<"$out")"; then ok "finds an agent under a later label, and names it"; else bad "finds an agent under a later label (got: $(head -1 <<<"$out"))"; fi
+else
+  echo "  note: no loaded agent to stand in, skipped one status check"
+fi
+
 echo "argument errors"
 LOG=""; CALLS=""
 for args in "--bogus" "--interval 0" "--interval inf" "--timeout 1e30" "--settle nan" "--device" "frobnicate"; do

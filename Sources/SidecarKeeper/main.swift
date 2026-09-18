@@ -13,8 +13,12 @@
 import AppKit
 import Foundation
 
-let version = "1.2.0"
-let agentLabel = "com.sidecarkeeper.agent"
+let version = "1.2.1"
+// The standard installer's LaunchAgent, then the labels `brew services` uses (new and old).
+// SIDECARKEEPER_AGENT_LABELS overrides the list, for tests.
+let agentLabels = ProcessInfo.processInfo.environment["SIDECARKEEPER_AGENT_LABELS"]?
+    .split(separator: ",").map(String.init)
+    ?? ["com.sidecarkeeper.agent", "sh.brew.sidecarkeeper", "homebrew.mxcl.sidecarkeeper"]
 
 // MARK: - Configuration
 
@@ -168,9 +172,18 @@ case "resume":
     print("resumed: reconnecting on the next tick"); exit(0)
 case "status":
     let cfg = parseOptions(argv)
-    let agent = run("/bin/launchctl", ["print", "gui/\(getuid())/\(agentLabel)"])
-    let state = agent.split(separator: "\n").first { $0.trimmingCharacters(in: .whitespaces).hasPrefix("state =") }
-    print("agent:  \(state.map { $0.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: "state = ", with: "") } ?? "not loaded")")
+    // Report every agent that is loaded: two at once means two watchers competing.
+    var found: [String] = []
+    for label in agentLabels {
+        let out = run("/bin/launchctl", ["print", "gui/\(getuid())/\(label)"], timeout: 10)
+        guard let line = out.split(separator: "\n").first(where: {
+            $0.trimmingCharacters(in: .whitespaces).hasPrefix("state =")
+        }) else { continue }
+        let state = line.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: "state = ", with: "")
+        found.append("\(state) (\(label))")
+    }
+    print("agent:  \(found.isEmpty ? "not loaded" : found.joined(separator: ", "))")
+    if found.count > 1 { print("        warning: more than one watcher is loaded; stop one of them") }
     print("paused: \(FileManager.default.fileExists(atPath: pauseFile) ? "yes" : "no")")
     print("usb:    \(usbAttached(cfg.usbMatch) ? "\(cfg.usbMatch) attached by cable" : "no \(cfg.usbMatch) on USB") (only matters with --wired)")
     print("log:    \(cfg.logPath)")

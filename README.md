@@ -88,7 +88,7 @@ locked or with the lid closed, no attempts when the iPad is out of range.
 
 ## Install
 
-Unlock the iPad first so it shows up. There are three ways, and all end in the same place.
+Unlock the iPad first so it shows up. There are four ways, and all end in the same place.
 
 **1. One line (recommended).** Downloads the latest release, checks the archive against the
 SHA-256 stamped into that release's installer, and installs the prebuilt binaries. Nothing
@@ -103,13 +103,24 @@ If you would rather read a script before running it, download `install.sh` from 
 [latest release](https://github.com/EMOEMOJAI/SidecarKeeper/releases/latest) first. It is
 short.
 
-**2. Download the release.** Get `SidecarKeeper.tar.gz` from the
+**2. Homebrew.** Builds from source with the compiler Homebrew already requires.
+
+```sh
+brew install emoemojai/tap/sidecarkeeper
+brew services start sidecarkeeper
+```
+
+The Homebrew service keeps the first reachable iPad connected. To pick a specific iPad or
+use wired mode, use one of the other routes. Do not run both, or two watchers will compete;
+`sidecar-keeper status` warns you if that happens.
+
+**3. Download the release.** Get `SidecarKeeper.tar.gz` from the
 [latest release](https://github.com/EMOEMOJAI/SidecarKeeper/releases/latest), unpack it,
 open Terminal, drag `install.sh` into the window and press Return. This route checks
 nothing by itself, so verify the download first if you want that: `shasum -a 256 -c
 SidecarKeeper.tar.gz.sha256`, or the attestation command below.
 
-**3. Build from source.** Needs the Xcode Command Line Tools (`xcode-select --install`) and
+**4. Build from source.** Needs the Xcode Command Line Tools (`xcode-select --install`) and
 git.
 
 ```sh
@@ -120,7 +131,8 @@ cd SidecarKeeper
 ./install.sh --wired              # cable only, see "Wired mode" below
 ```
 
-Every route installs two small binaries to `~/.sidecarkeeper/bin`, writes
+Apart from Homebrew, which uses its own directories and `brew services`, every route
+installs two small binaries to `~/.sidecarkeeper/bin`, writes
 `~/Library/LaunchAgents/com.sidecarkeeper.agent.plist` and starts it. If a user-writable
 directory such as `/opt/homebrew/bin` is on your `PATH`, the `sidecar-keeper` command is
 linked there (`--no-link` to skip). Nothing needs `sudo`, and running the installer again
@@ -313,7 +325,7 @@ Sidecar on your Mac.
 
 ```sh
 make build   # build/sidecar-keeper
-make test    # 43 behaviour tests against a fake SidecarLauncher, no iPad needed (~40 s)
+make test    # 45 behaviour tests against a fake SidecarLauncher, no iPad needed (~40 s)
 make check   # build + test + bash -n + shellcheck + plist lint; run before pushing
 make package # release bundle with universal binaries, in dist/
 ```
