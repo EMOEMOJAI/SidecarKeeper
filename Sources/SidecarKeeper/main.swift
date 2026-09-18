@@ -13,7 +13,7 @@
 import AppKit
 import Foundation
 
-let version = "1.1.0"
+let version = "1.1.1"
 let agentLabel = "com.sidecarkeeper.agent"
 
 // MARK: - Configuration
@@ -78,7 +78,9 @@ func parseOptions(_ argv: [String]) -> Config {
         return v
     }
     func seconds(_ flag: String, min: TimeInterval) -> TimeInterval {
-        guard let n = TimeInterval(value(flag)), n >= min else { die("\(flag) must be a number >= \(Int(min))") }
+        guard let n = TimeInterval(value(flag)), n.isFinite, n >= min, n <= 86_400 else {
+            die("\(flag) must be a number of seconds between \(Int(min)) and 86400")
+        }
         return n
     }
     while let a = args.next() {
@@ -231,7 +233,9 @@ enum Probe { case found(String), missing, launcherError(String) }
 func probeDevice() -> Probe {
     let out = run(cfg.launcher, ["devices"], timeout: cfg.timeout)
     if out.hasPrefix("spawn error") || out.hasPrefix("timeout") { return .launcherError(out) }
-    let names = out.split(separator: "\n").map(String.init).filter { $0 != "No sidecar capable devices detected" }
+    let names = out.split(separator: "\n").map(String.init).filter {
+        $0 != "No sidecar capable devices detected" && !$0.hasPrefix("Error") && !$0.contains("Domain=")
+    }
     if let wanted = cfg.device {
         return names.first { normalized($0) == normalized(wanted) }.map(Probe.found) ?? .missing
     }
@@ -246,7 +250,8 @@ func tick() {
     if !cabled { cableWasAbsent = true }
     if FileManager.default.fileExists(atPath: pauseFile) { log("paused, idle"); return }
     guard screensAwake else { log("screen off, idle"); return }
-    guard unlocked else { log("locked, idle"); return }
+    // The lock notifications are best-effort and only report changes, so also ask the session.
+    guard unlocked && !sessionLocked() else { log("locked, idle"); return }
     if lidClosed() { log("lid closed, idle"); return }
     guard cabled else { log("wired mode: no \(cfg.usbMatch) on USB, idle"); return }
     guard Date() >= nextAllowed else { return }
@@ -296,6 +301,14 @@ ws.addObserver(forName: NSWorkspace.didWakeNotification,         object: nil, qu
 let dnc = DistributedNotificationCenter.default()
 dnc.addObserver(forName: Notification.Name("com.apple.screenIsLocked"),   object: nil, queue: .main) { _ in unlocked = false; log("session locked", always: true) }
 dnc.addObserver(forName: Notification.Name("com.apple.screenIsUnlocked"), object: nil, queue: .main) { _ in unlocked = true;  resume("session unlocked") }
+
+// A watcher that cannot log is undebuggable, so make sure the log is writable before starting.
+try? FileManager.default.createDirectory(atPath: (cfg.logPath as NSString).deletingLastPathComponent,
+                                         withIntermediateDirectories: true)
+if !FileManager.default.isWritableFile(atPath: cfg.logPath),
+   !FileManager.default.createFile(atPath: cfg.logPath, contents: nil) {
+    FileHandle.standardError.write("cannot write log file \(cfg.logPath)\n".data(using: .utf8)!); exit(1)
+}
 
 unlocked = !sessionLocked()
 log("watcher \(version) started (device: \(cfg.device ?? "auto"), \(cfg.wired ? "wired only, " : "")launcher: \(cfg.launcher))", always: true)

@@ -8,7 +8,7 @@ build: $(BUILD)/sidecar-keeper
 
 $(BUILD)/sidecar-keeper: Sources/SidecarKeeper/main.swift
 	@mkdir -p $(BUILD)
-	$(SWIFTC) -O -framework AppKit $< -o $@
+	$(SWIFTC) -O -warnings-as-errors -framework AppKit $< -o $@
 
 # Behaviour tests against a fake SidecarLauncher; no iPad involved (~40 s).
 test: build

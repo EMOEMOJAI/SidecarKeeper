@@ -130,11 +130,23 @@ plug
 
 echo "argument errors"
 LOG=""; CALLS=""
-for args in "--bogus" "--interval 0" "--device" "frobnicate"; do
+for args in "--bogus" "--interval 0" "--interval inf" "--timeout 1e30" "--settle nan" "--device" "frobnicate"; do
   # shellcheck disable=SC2086
   "$BIN" $args >/dev/null 2>&1; rc=$?
   if [ "$rc" -eq 2 ]; then ok "rejects: $args"; else bad "rejects: $args (exit $rc)"; fi
 done
+
+echo "log file handling"
+echo ok > "$WORK/mode"
+"$BIN" --launcher "$WORK/SidecarLauncher" --log "$WORK/new/sub/dir/w.log" --interval 1 & pid=$!; sleep 2; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null
+LOG="$(cat "$WORK/new/sub/dir/w.log" 2>/dev/null)"
+has    "creates missing log directories"  "started"
+mkdir -p "$WORK/ro"; chmod 555 "$WORK/ro"
+"$BIN" --launcher "$WORK/SidecarLauncher" --log "$WORK/ro/w.log" --interval 1 >/dev/null 2>"$WORK/err" & pid=$!
+sleep 2; if kill -0 "$pid" 2>/dev/null; then kill "$pid"; wait "$pid" 2>/dev/null; rc=running; else wait "$pid"; rc=$?; fi
+LOG="$(cat "$WORK/err")"; chmod 755 "$WORK/ro"
+if [ "$rc" = 1 ]; then ok "unwritable log exits 1 instead of running blind"; else bad "unwritable log exits 1 (got: $rc)"; fi
+has    "and says why on stderr"           "cannot write log file"
 
 echo; echo "$PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

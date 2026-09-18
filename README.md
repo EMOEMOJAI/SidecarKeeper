@@ -199,7 +199,7 @@ After a macOS update breaks things, re-run `./install.sh` to rebuild both binari
 
 ```sh
 make build   # build/sidecar-keeper
-make test    # 37 behaviour tests against a fake SidecarLauncher, no iPad needed (~40 s)
+make test    # 43 behaviour tests against a fake SidecarLauncher, no iPad needed (~40 s)
 make check   # build + test + bash -n + shellcheck + plist lint; run before pushing
 ```
 
