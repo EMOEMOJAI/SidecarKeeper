@@ -10,6 +10,7 @@
 #   source checkout  run from a git clone: builds both binaries with swiftc. Needs the Xcode
 #                    Command Line Tools and git.
 set -euo pipefail
+[ -n "${BASH_VERSION:-}" ] || { echo "error: run this installer with bash" >&2; exit 2; }
 
 ORIG_ARGS=("$@")
 # Filled in by the release workflow in the install.sh attached to a release, so that the
@@ -70,6 +71,9 @@ fi
 
 # Work out how we were started. Under `bash -c "$(curl ...)"` there is no script file at all.
 SELF="${BASH_SOURCE[0]:-}"
+# Only a file really called install.sh counts. This keeps a stray name resolved against the
+# current directory from ever selecting a bin/ folder to install from.
+case "${SELF##*/}" in install.sh) ;; *) SELF="" ;; esac
 REPO_DIR=""
 if [ -n "$SELF" ] && [ -f "$SELF" ]; then REPO_DIR="$(cd "$(dirname "$SELF")" && pwd)"; fi
 if [ -n "$REPO_DIR" ] && [ -x "$REPO_DIR/bin/sidecar-keeper" ] && [ -x "$REPO_DIR/bin/SidecarLauncher" ]; then
@@ -92,20 +96,26 @@ BUILD_DIR="$(mktemp -d "${TMP%/}/sidecarkeeper.XXXXXX")"
 trap 'rm -rf "$BUILD_DIR"' EXIT
 
 if [ "$MODE" = bootstrap ]; then
+  [ -z "${SIDECARKEEPER_NO_BOOTSTRAP:-}" ] || die "the downloaded bundle is incomplete (no prebuilt binaries in it)"
   if [ -n "$BUNDLE_VERSION" ]; then url="$RELEASES/download/v$BUNDLE_VERSION/SidecarKeeper.tar.gz"
   else url="$RELEASES/latest/download/SidecarKeeper.tar.gz"; fi
   echo "==> Downloading ${BUNDLE_VERSION:+v$BUNDLE_VERSION }release bundle"
-  fetch() { curl -fsSL --proto '=https' --tlsv1.2 --retry 2 "$1"; }
+  fetch() { curl -fsSL --proto '=https' --proto-redir '=https' --tlsv1.2 --retry 2 "$1"; }
   fetch "$url" > "$BUILD_DIR/bundle.tar.gz" || die "download failed: $url"
   want="$BUNDLE_SHA256"
-  if [ -z "$want" ]; then want="$(fetch "$url.sha256" | awk '{print $1}')" || die "could not fetch the checksum"; fi
+  if [ -z "$want" ]; then
+    # This copy carries no hash of its own (it did not come from a release), so the checksum
+    # is fetched from the same place as the archive and only detects a corrupted download.
+    echo "    note: unpinned installer, checksum taken from the release itself" >&2
+    want="$(fetch "$url.sha256" | awk '{print $1}')" || die "could not fetch the checksum"
+  fi
   got="$(shasum -a 256 "$BUILD_DIR/bundle.tar.gz" | awk '{print $1}')"
   [ -n "$want" ] && [ "$got" = "$want" ] || die "checksum mismatch: expected ${want:-<none>}, got $got"
   echo "    sha256 ok"
   tar -xzf "$BUILD_DIR/bundle.tar.gz" -C "$BUILD_DIR"
   [ -f "$BUILD_DIR/SidecarKeeper/install.sh" ] || die "unexpected bundle layout"
   # Bash 3.2 (the macOS default) treats an empty array as unset under `set -u`.
-  bash "$BUILD_DIR/SidecarKeeper/install.sh" ${ORIG_ARGS[@]+"${ORIG_ARGS[@]}"}
+  SIDECARKEEPER_NO_BOOTSTRAP=1 bash "$BUILD_DIR/SidecarKeeper/install.sh" ${ORIG_ARGS[@]+"${ORIG_ARGS[@]}"}
   exit $?
 fi
 
@@ -113,7 +123,9 @@ if [ "$MODE" = bundle ]; then
   echo "==> Using the prebuilt binaries in $REPO_DIR/bin"
   cp "$REPO_DIR/bin/SidecarLauncher" "$BUILD_DIR/SidecarLauncher.bin"
   cp "$REPO_DIR/bin/sidecar-keeper" "$BUILD_DIR/sidecar-keeper"
-  # A browser download is quarantined, and macOS refuses to run quarantined unsigned binaries.
+  # A browser download is quarantined, and macOS refuses to run quarantined binaries that are
+  # not notarized. Removing the flag from these two copies is what lets them run; it also
+  # means macOS will not ask before they do.
   xattr -d com.apple.quarantine "$BUILD_DIR/SidecarLauncher.bin" "$BUILD_DIR/sidecar-keeper" 2>/dev/null || true
 else
 echo "==> Building SidecarLauncher (${UPSTREAM_REF:0:12})"

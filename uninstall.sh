@@ -9,7 +9,7 @@ main() {
   LABEL="com.sidecarkeeper.agent"
   # When run from inside an install directory, that directory is the default prefix.
   SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  if [ -f "$SELF_DIR/.sidecarkeeper" ]; then DEFAULT_PREFIX="$SELF_DIR"; else DEFAULT_PREFIX="$HOME/.sidecarkeeper"; fi
+  if grep -q '^SidecarKeeper install directory' "$SELF_DIR/.sidecarkeeper" 2>/dev/null; then DEFAULT_PREFIX="$SELF_DIR"; else DEFAULT_PREFIX="$HOME/.sidecarkeeper"; fi
   PREFIX="${SIDECARKEEPER_PREFIX:-$DEFAULT_PREFIX}"
   PURGE=0
   LEFTOVER=0
@@ -35,7 +35,8 @@ main() {
   fi
   # Only delete a directory that install.sh marked as ours. The marker must be a real file:
   # a symlinked or merely similar-looking directory is never removed.
-  if [ -f "$PREFIX/.sidecarkeeper" ] && [ ! -L "$PREFIX/.sidecarkeeper" ] && [ ! -L "$PREFIX" ]; then
+  if [ -f "$PREFIX/.sidecarkeeper" ] && [ ! -L "$PREFIX/.sidecarkeeper" ] && [ ! -L "$PREFIX" ] \
+     && grep -q '^SidecarKeeper install directory' "$PREFIX/.sidecarkeeper"; then
     case "${PREFIX%/}" in
       ""|"$HOME"|/usr|/usr/local|/opt|/opt/homebrew|/Applications|/Library|/System|/bin|/sbin|/etc|/var|/tmp)
         echo "error: refusing to delete $PREFIX" >&2; exit 1 ;;

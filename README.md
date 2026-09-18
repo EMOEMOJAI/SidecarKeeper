@@ -90,8 +90,9 @@ locked or with the lid closed, no attempts when the iPad is out of range.
 
 Unlock the iPad first so it shows up. There are three ways, and all end in the same place.
 
-**1. One line (recommended).** Downloads the latest release, verifies its SHA-256, and
-installs the prebuilt binaries. Nothing else is required.
+**1. One line (recommended).** Downloads the latest release, checks the archive against the
+SHA-256 stamped into that release's installer, and installs the prebuilt binaries. Nothing
+else is required.
 
 ```sh
 /bin/bash -c "$(curl -fsSL https://github.com/EMOEMOJAI/SidecarKeeper/releases/latest/download/install.sh)"
@@ -104,9 +105,9 @@ short.
 
 **2. Download the release.** Get `SidecarKeeper.tar.gz` from the
 [latest release](https://github.com/EMOEMOJAI/SidecarKeeper/releases/latest), unpack it,
-open Terminal, drag `install.sh` into the window and press Return. The installer clears the
-quarantine flag that macOS puts on browser downloads, which is why it has to be started from
-Terminal and not by double-clicking.
+open Terminal, drag `install.sh` into the window and press Return. This route checks
+nothing by itself, so verify the download first if you want that: `shasum -a 256 -c
+SidecarKeeper.tar.gz.sha256`, or the attestation command below.
 
 **3. Build from source.** Needs the Xcode Command Line Tools (`xcode-select --install`) and
 git.
@@ -127,6 +128,9 @@ is the way to update or change the device.
 
 Release binaries are universal (Apple silicon and Intel), built by GitHub Actions from the
 tagged source, and not notarized, because that requires a paid Apple developer account.
+macOS quarantines browser downloads and will not run un-notarized binaries while that flag
+is set, so the installer removes it from the two binaries it installs. Be aware that this
+also means macOS will not ask you before they run.
 You can check where they came from with
 `gh attestation verify SidecarKeeper.tar.gz --repo EMOEMOJAI/SidecarKeeper`. When building
 from source, [SidecarLauncher](https://github.com/Ocasio-J/SidecarLauncher) is fetched at a

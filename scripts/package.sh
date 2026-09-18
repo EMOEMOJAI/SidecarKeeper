@@ -12,6 +12,7 @@ VERSION="$(sed -n 's/^let version = "\(.*\)"$/\1/p' Sources/SidecarKeeper/main.s
 # shellcheck disable=SC2016  # the ${...} is literal text being matched, not an expansion
 REF="$(sed -n 's/^UPSTREAM_REF="${SIDECARLAUNCHER_REF:-\([0-9a-f]\{40\}\)}"$/\1/p' install.sh)"
 [ -n "$VERSION" ] && [ -n "$REF" ] || { echo "could not read version or upstream ref" >&2; exit 1; }
+case "$VERSION" in *[!0-9.]*) echo "version must be digits and dots, got: $VERSION" >&2; exit 1 ;; esac
 echo "==> SidecarKeeper $VERSION, SidecarLauncher ${REF:0:12}, macOS $MIN_MACOS+, arm64 + x86_64"
 
 TMP="${TMPDIR:-/tmp}"; WORK="$(mktemp -d "${TMP%/}/sk-package.XXXXXX")"; trap 'rm -rf "$WORK"' EXIT
@@ -36,6 +37,8 @@ universal "$WORK/upstream/SidecarLauncher/main.swift" "$STAGE/bin/SidecarLaunche
 universal "$PWD/Sources/SidecarKeeper/main.swift" "$STAGE/bin/sidecar-keeper" -warnings-as-errors -framework AppKit
 
 [ "$("$STAGE/bin/sidecar-keeper" --version)" = "$VERSION" ] || { echo "binary version mismatch" >&2; exit 1; }
+# Nothing about the machine that built this may end up inside the binaries.
+if LC_ALL=C strings -a "$STAGE/bin/"* | grep -E "/Users/|/home/|$WORK"; then echo "build paths leaked into a binary" >&2; exit 1; fi
 for b in sidecar-keeper SidecarLauncher; do
   [ "$(lipo -archs "$STAGE/bin/$b")" = "x86_64 arm64" ] || { echo "$b is not universal" >&2; exit 1; }
 done
@@ -60,5 +63,7 @@ SHA="$(shasum -a 256 dist/SidecarKeeper.tar.gz | awk '{print $1}')"
 echo "$SHA  SidecarKeeper.tar.gz" > dist/SidecarKeeper.tar.gz.sha256
 sed -e "s/^BUNDLE_VERSION=\"\"$/BUNDLE_VERSION=\"$VERSION\"/" -e "s/^BUNDLE_SHA256=\"\"$/BUNDLE_SHA256=\"$SHA\"/" install.sh > dist/install.sh
 grep -q "^BUNDLE_SHA256=\"$SHA\"$" dist/install.sh || { echo "stamping failed" >&2; exit 1; }
+grep -q "^BUNDLE_VERSION=\"$VERSION\"$" dist/install.sh || { echo "stamping failed" >&2; exit 1; }
+bash -n dist/install.sh
 chmod +x dist/install.sh
 echo "==> dist/"; (cd dist && wc -c SidecarKeeper.tar.gz SidecarKeeper.tar.gz.sha256 install.sh | sed 's/^/    /'); echo "    sha256 $SHA"

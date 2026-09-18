@@ -50,6 +50,10 @@ jobs:
       - name: Install with no developer tools, then uninstall
         run: |
           (cd dist && shasum -a 256 -c SidecarKeeper.tar.gz.sha256)
+          # The one-liner entry point must parse, and must pin this exact version and archive.
+          bash -n dist/install.sh
+          grep -q "^BUNDLE_VERSION=\"${GITHUB_REF_NAME#v}\"$" dist/install.sh
+          grep -q "^BUNDLE_SHA256=\"$(shasum -a 256 dist/SidecarKeeper.tar.gz | awk '{print $1}')\"$" dist/install.sh
           # The whole point of the bundle: it must never reach for a compiler or git.
           mkdir poison
           for t in swiftc git xcodebuild; do printf '#!/bin/sh\necho "%s was called" >&2; exit 99\n' "$t" > "poison/$t"; chmod +x "poison/$t"; done
@@ -85,6 +89,7 @@ jobs:
         with:
           subject-path: |
             dist/SidecarKeeper.tar.gz
+            dist/SidecarKeeper.tar.gz.sha256
             dist/install.sh
       - name: Create the release
         env:
