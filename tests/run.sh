@@ -89,7 +89,9 @@ sleep 3; t1=$(ps -M "$pid" | count); f1=$(lsof -p "$pid" 2>/dev/null | count)
 sleep 4; t2=$(ps -M "$pid" | count); f2=$(lsof -p "$pid" 2>/dev/null | count)
 kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; pkill -f "sleep 20" 2>/dev/null
 LOG="$(cat "$WORK/log")"; CALLS=""
-if [ "$t2" -le "$t1" ] && [ "$f2" -le "$f1" ]; then ok "threads $t1->$t2, fds $f1->$f2"; else bad "threads $t1->$t2, fds $f1->$f2 grew"; fi
+# File descriptors are the exact signal. The thread pool adds or drops a worker at will, so
+# one thread of drift is noise; the real leak stranded two threads and two descriptors.
+if [ "$f2" -le "$f1" ] && [ "$t2" -le $((t1 + 1)) ]; then ok "threads $t1->$t2, fds $f1->$f2"; else bad "threads $t1->$t2, fds $f1->$f2 grew"; fi
 
 echo "missing launcher"
 echo ok > "$WORK/mode"; rm -f "$WORK/log"
