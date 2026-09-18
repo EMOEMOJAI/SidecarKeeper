@@ -35,6 +35,9 @@ render social-preview.svg 1280 640 social-preview.png
 # Root copy: some editors and tools look for favicon.svg in the project root first.
 cp favicon.svg ../favicon.svg; echo "  ../favicon.svg"
 
+# The website in docs/ serves its own copies.
+sync_docs() { for f in favicon.svg favicon.ico apple-touch-icon.png icon.svg social-preview.png; do cp "$f" "../docs/$f"; done; echo "  ../docs/ (5 files)"; }
+
 # favicon.ico: PNG-compressed entries, 16/32/48.
 python3 - <<'PY'
 import struct
@@ -44,3 +47,4 @@ for s,b in zip(sizes,blobs):
     out+=struct.pack("<BBBBHHII",s,s,0,0,1,32,len(b),off); off+=len(b)
 open("favicon.ico","wb").write(out+b"".join(blobs)); print("  favicon.ico")
 PY
+sync_docs

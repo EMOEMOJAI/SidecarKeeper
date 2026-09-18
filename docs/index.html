@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SidecarKeeper: auto-reconnect Apple Sidecar on macOS</title>
+<meta name="description" content="Free, open-source macOS utility that automatically reconnects Apple Sidecar, so your iPad keeps working as a second display after sleep, lock or lid close. No notification spam.">
+<link rel="canonical" href="https://emoemojai.github.io/SidecarKeeper/">
+<meta name="theme-color" content="#0D0F14">
+<meta name="color-scheme" content="dark light">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon.ico" sizes="16x16 32x32 48x48">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="SidecarKeeper">
+<meta property="og:title" content="SidecarKeeper: auto-reconnect Apple Sidecar on macOS">
+<meta property="og:description" content="Free, open-source macOS utility that automatically reconnects Apple Sidecar, so your iPad keeps working as a second display after sleep, lock or lid close. No notification spam.">
+<meta property="og:url" content="https://emoemojai.github.io/SidecarKeeper/">
+<meta property="og:image" content="https://emoemojai.github.io/SidecarKeeper/social-preview.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="640">
+<meta property="og:image:alt" content="SidecarKeeper icon: a Mac screen holding a smaller iPad screen in its corner">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="alternate" type="text/plain" href="llms.txt" title="Summary for language models">
+<script type="application/ld+json">[{"@context":"https://schema.org","@type":"SoftwareApplication","name":"SidecarKeeper","description":"Free, open-source macOS utility that automatically reconnects Apple Sidecar, so your iPad keeps working as a second display after sleep, lock or lid close. No notification spam.","url":"https://emoemojai.github.io/SidecarKeeper/","applicationCategory":"UtilitiesApplication","operatingSystem":"macOS 14.2 or later","license":"https://opensource.org/licenses/MIT","isAccessibleForFree":true,"codeRepository":"https://github.com/EMOEMOJAI/SidecarKeeper","downloadUrl":"https://github.com/EMOEMOJAI/SidecarKeeper/releases/latest","image":"https://emoemojai.github.io/SidecarKeeper/social-preview.png","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"author":{"@type":"Person","name":"EMOEMOJAI","url":"https://github.com/EMOEMOJAI"}},{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Sidecar keeps disconnecting when my Mac sleeps or locks. Does this fix it?","acceptedAnswer":{"@type":"Answer","text":"macOS always drops Sidecar when the built-in display turns off, and nothing can prevent that. SidecarKeeper reconnects automatically within a few seconds of the display coming back, so you never reconnect by hand."}},{"@type":"Question","name":"How do I automatically connect my iPad as a second display at login?","acceptedAnswer":{"@type":"Answer","text":"Install SidecarKeeper. Its LaunchAgent starts at login and connects as soon as the iPad is reachable and unlocked."}},{"@type":"Question","name":"Can I use Sidecar with the MacBook lid closed?","acceptedAnswer":{"@type":"Answer","text":"No. macOS cannot create the Sidecar virtual display while the built-in display is off (error -501). That is an Apple limitation no tool can work around. SidecarKeeper waits quietly and reconnects when you open the lid."}},{"@type":"Question","name":"How do I stop the \"Unable to connect to iPad\" notifications?","acceptedAnswer":{"@type":"Answer","text":"Those come from connect attempts that were never going to succeed. SidecarKeeper checks screen, lock, lid and device state first, and backs off from 30 seconds to 5 minutes after a real failure."}},{"@type":"Question","name":"Does it need admin rights or special permissions?","acceptedAnswer":{"@type":"Answer","text":"No. It is a per-user LaunchAgent and two small binaries in your home folder. It never asks for sudo and needs no privacy permissions."}},{"@type":"Question","name":"Does it work over USB or Wi-Fi?","acceptedAnswer":{"@type":"Answer","text":"Both. By default macOS picks the transport. An experimental wired mode forces the USB cable."}}]}]</script>
+<style>
+:root{--bg:#0D0F14;--panel:#151922;--line:#262C38;--text:#E6EAF2;--muted:#8B93A5;--mint:#5EF2C2;--teal:#14B8A6;--amber:#FFB454;--code:#0A0C10}
+@media (prefers-color-scheme:light){:root{--bg:#F6F7FA;--panel:#FFFFFF;--line:#DDE1EA;--text:#12151C;--muted:#5A6272;--mint:#0E9F84;--teal:#0B7F72;--amber:#B86A00;--code:#0D0F14}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:17px/1.6 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Inter,Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--mint);text-underline-offset:3px}
+a:focus-visible,summary:focus-visible,button:focus-visible{outline:2px solid var(--amber);outline-offset:3px;border-radius:4px}
+.wrap{max-width:1040px;margin:0 auto;padding:0 24px}
+header{display:flex;align-items:center;justify-content:space-between;padding:22px 0}
+.brand{display:flex;align-items:center;gap:10px;font-weight:300;font-size:19px;letter-spacing:-.2px;color:var(--text);text-decoration:none}
+.brand b{font-weight:700}
+.brand img{width:30px;height:30px}
+nav a{color:var(--muted);text-decoration:none;margin-left:22px;font-size:15px}
+nav a:hover{color:var(--text)}
+.hero{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);grid-template-areas:"copy log" "install install";gap:44px 56px;align-items:center;padding:56px 0 72px}
+.hero>.copy{grid-area:copy}.hero>.log{grid-area:log}.hero>.cta{grid-area:install;min-width:0}
+h1{font-size:clamp(34px,5.2vw,56px);line-height:1.06;letter-spacing:-1.6px;margin:0 0 20px;font-weight:700}
+h1 span{color:var(--mint)}
+.lede{font-size:19px;color:var(--muted);margin:0;max-width:33em}
+.lede strong{color:var(--text);font-weight:500}
+.install{background:var(--code);border:1px solid var(--line);border-radius:12px;padding:16px 18px;position:relative;color:#E6EAF2}
+.install pre{margin:0;padding-right:70px;font:13px/1.9 ui-monospace,"SF Mono",Menlo,Consolas,monospace;overflow-x:auto;white-space:pre}
+.install .p{color:#5A6272;user-select:none}
+.install button{position:absolute;top:10px;right:10px;background:#1C212B;color:#C9CFDB;border:1px solid #2E3542;border-radius:7px;font:13px -apple-system,sans-serif;padding:5px 11px;cursor:pointer}
+.install button:hover{color:#fff;border-color:var(--teal)}
+.meta{margin:16px 0 0;font-size:14.5px;color:var(--muted)}
+.log{background:var(--code);border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 30px 80px -30px rgba(20,184,166,.35)}
+.log .bar{display:flex;gap:7px;padding:12px 14px;border-bottom:1px solid #1C212B;align-items:center}
+.log .bar i{width:11px;height:11px;border-radius:50%;background:#2A303C}
+.log .bar span{margin-left:8px;font:12.5px ui-monospace,Menlo,monospace;color:#5A6272}
+.log ol{list-style:none;margin:0;padding:16px 18px 20px;font:13.5px/2 ui-monospace,"SF Mono",Menlo,Consolas,monospace;color:#AEB6C6}
+.log li{opacity:0;animation:in .5s ease forwards;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.log time{color:#4D5566;margin-right:12px}
+.log .ok{color:#5EF2C2} .log .idle{color:#6B7486} .log .ev{color:#FFB454}
+.log li:nth-child(1){animation-delay:.2s}.log li:nth-child(2){animation-delay:.7s}.log li:nth-child(3){animation-delay:1.2s}.log li:nth-child(4){animation-delay:1.9s}.log li:nth-child(5){animation-delay:2.4s}.log li:nth-child(6){animation-delay:3.1s}.log li:nth-child(7){animation-delay:3.6s}
+@keyframes in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.log li{animation:none;opacity:1}}
+.log figcaption{padding:0 18px 16px;font-size:13.5px;color:#6B7486}
+figure{margin:0}
+section{padding:64px 0;border-top:1px solid var(--line)}
+h2{font-size:30px;letter-spacing:-.7px;margin:0 0 12px}
+.sub{color:var(--muted);margin:0 0 34px;max-width:40em}
+.gates{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;padding:0;margin:0;list-style:none}
+@media (max-width:980px){.gates{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}}
+.gates li{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 16px 16px}
+.gates b{display:block;margin-bottom:6px;line-height:1.3}
+.gates span{color:var(--muted);font-size:14.5px;line-height:1.5;display:block}
+.gates code{font-size:13px;color:var(--text)}
+.gates li::before{content:"";display:block;width:9px;height:9px;border-radius:50%;background:var(--mint);margin-bottom:14px;box-shadow:0 0 0 4px color-mix(in srgb,var(--mint) 18%,transparent)}
+.limits{display:grid;grid-template-columns:1fr 1fr;gap:40px}
+.limits h3{font-size:18px;margin:0 0 8px}
+.limits p{color:var(--muted);margin:0 0 22px;font-size:16px}
+details{border-bottom:1px solid var(--line);padding:4px 0}
+summary{cursor:pointer;padding:15px 0;font-weight:600;list-style:none;display:flex;justify-content:space-between;gap:16px}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"+";color:var(--mint);font-weight:400;font-size:22px;line-height:1}
+details[open] summary::after{content:"\2013"}
+details p{color:var(--muted);margin:0 0 18px;max-width:46em}
+footer{padding:36px 0 56px;color:var(--muted);font-size:14.5px;border-top:1px solid var(--line)}
+footer a{color:var(--muted)}
+@media (max-width:820px){.hero{grid-template-columns:minmax(0,1fr);grid-template-areas:"copy" "install" "log";gap:30px;padding:28px 0 52px}.install pre{white-space:pre-wrap;word-break:break-all;padding-right:0;padding-top:30px}.limits{grid-template-columns:1fr;gap:0}nav a:not(.gh){display:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a class="brand" href="./"><img src="icon.svg" alt="" width="30" height="30"><span>Sidecar<b>Keeper</b></span></a>
+    <nav><a href="#how">How it works</a><a href="#faq">FAQ</a><a class="gh" href="https://github.com/EMOEMOJAI/SidecarKeeper">GitHub</a></nav>
+  </header>
+
+  <main>
+  <div class="hero">
+    <div class="copy">
+      <h1>Your iPad display, <span>back by itself.</span></h1>
+      <p class="lede">macOS drops Sidecar every time the screen sleeps, locks or the lid closes, and never reconnects it. <strong>SidecarKeeper does, within seconds, without a single “Unable to connect” notification.</strong></p>
+    </div>
+    <div class="cta">
+      <div class="install">
+        <button type="button" id="copy" aria-label="Copy install commands">Copy</button>
+<pre id="cmd"><span class="p">$ </span>/bin/bash -c "$(curl -fsSL https://github.com/EMOEMOJAI/SidecarKeeper/releases/latest/download/install.sh)"</pre>
+      </div>
+      <p class="meta">Paste into Terminal with your iPad unlocked. Free and open source (MIT). macOS 14.2 or newer, Apple silicon and Intel. No Xcode, no sudo, no permissions. Prefer to build it yourself? <a href="https://github.com/EMOEMOJAI/SidecarKeeper#install">See the README</a>.</p>
+    </div>
+    <figure class="log" aria-label="Example of the SidecarKeeper log">
+      <div class="bar"><i></i><i></i><i></i><span>~/Library/Logs/sidecar-keeper.log</span></div>
+      <ol>
+        <li><time>09:14:02</time><span class="ok">ok</span></li>
+        <li><time>12:45:44</time><span class="ev">session locked</span></li>
+        <li><time>12:45:53</time><span class="idle">locked, idle</span></li>
+        <li><time>12:53:13</time><span class="ev">session unlocked</span></li>
+        <li><time>12:53:22</time><span class="ok">reconnected iPad</span></li>
+        <li><time>23:10:31</time><span class="idle">lid closed, idle</span></li>
+        <li><time>07:58:09</time><span class="ok">reconnected iPad</span></li>
+      </ol>
+      <figcaption>A whole day, seven lines. It waits when a connect cannot work, and acts the moment it can.</figcaption>
+    </figure>
+  </div>
+
+  <section id="how">
+    <h2>It only tries when it can succeed</h2>
+    <p class="sub">A script that calls “connect” in a loop fails while the Mac is locked, and every failure is a notification. Leave it overnight and you wake up to a hundred. SidecarKeeper checks five things first, and backs off from 30 seconds to 5 minutes after a real failure.</p>
+    <ul class="gates">
+      <li><b>You have not paused it</b><span>Disconnected on purpose? <code>sidecar-keeper pause</code> and it leaves you alone.</span></li>
+      <li><b>The screen is awake</b><span>Follows macOS display sleep and wake events, no polling guesswork.</span></li>
+      <li><b>The session is unlocked</b><span>Never attempts anything behind the lock screen.</span></li>
+      <li><b>The lid is open</b><span>Sidecar cannot start with the lid closed, so it waits.</span></li>
+      <li><b>The iPad is reachable</b><span>An 8 ms check before any attempt. Optional wired-only mode checks for the USB cable too.</span></li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Honest about the limits</h2>
+    <p class="sub">Two things are decided by macOS, not by any tool.</p>
+    <div class="limits">
+      <div><h3>Sidecar drops when the display turns off</h3><p>Display sleep, the lock screen and a closed lid all end the session. That cannot be prevented. SidecarKeeper makes the reconnect automatic and fast, typically 5 to 9 seconds.</p></div>
+      <div><h3>No Sidecar with the lid closed</h3><p>macOS cannot create the virtual display while the built-in one is off. Open the lid and the iPad is back before you have sat down.</p></div>
+    </div>
+  </section>
+
+  <section id="faq">
+    <h2>Questions</h2>
+    <p class="sub">More detail, configuration and a troubleshooting table are in the <a href="https://github.com/EMOEMOJAI/SidecarKeeper#readme">README</a>.</p>
+    <div>
+      <details><summary>Sidecar keeps disconnecting when my Mac sleeps or locks. Does this fix it?</summary><p>macOS always drops Sidecar when the built-in display turns off, and nothing can prevent that. SidecarKeeper reconnects automatically within a few seconds of the display coming back, so you never reconnect by hand.</p></details>
+      <details><summary>How do I automatically connect my iPad as a second display at login?</summary><p>Install SidecarKeeper. Its LaunchAgent starts at login and connects as soon as the iPad is reachable and unlocked.</p></details>
+      <details><summary>Can I use Sidecar with the MacBook lid closed?</summary><p>No. macOS cannot create the Sidecar virtual display while the built-in display is off (error -501). That is an Apple limitation no tool can work around. SidecarKeeper waits quietly and reconnects when you open the lid.</p></details>
+      <details><summary>How do I stop the &quot;Unable to connect to iPad&quot; notifications?</summary><p>Those come from connect attempts that were never going to succeed. SidecarKeeper checks screen, lock, lid and device state first, and backs off from 30 seconds to 5 minutes after a real failure.</p></details>
+      <details><summary>Does it need admin rights or special permissions?</summary><p>No. It is a per-user LaunchAgent and two small binaries in your home folder. It never asks for sudo and needs no privacy permissions.</p></details>
+      <details><summary>Does it work over USB or Wi-Fi?</summary><p>Both. By default macOS picks the transport. An experimental wired mode forces the USB cable.</p></details>
+    </div>
+  </section>
+  </main>
+
+  <footer>
+    <p>SidecarKeeper is MIT licensed and built on <a href="https://github.com/Ocasio-J/SidecarLauncher">SidecarLauncher</a> by Jovany Ocasio. Not affiliated with Apple. Sidecar, iPad, Mac and macOS are trademarks of Apple Inc.</p>
+    <p><a href="https://github.com/EMOEMOJAI/SidecarKeeper">Source</a> · <a href="https://github.com/EMOEMOJAI/SidecarKeeper/releases">Releases</a> · <a href="https://github.com/EMOEMOJAI/SidecarKeeper/issues">Issues</a> · <a href="llms.txt">llms.txt</a></p>
+  </footer>
+</div>
+<script>
+document.getElementById('copy').addEventListener('click',function(){
+  var t='/bin/bash -c "$(curl -fsSL https://github.com/EMOEMOJAI/SidecarKeeper/releases/latest/download/install.sh)"
+',b=this;
+  navigator.clipboard.writeText(t).then(function(){b.textContent='Copied';setTimeout(function(){b.textContent='Copy'},1600)});
+});
+</script>
+</body>
+</html>
