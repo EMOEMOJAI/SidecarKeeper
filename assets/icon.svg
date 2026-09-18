@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <title>SidecarKeeper</title>
+  <defs>
+    <linearGradient id="mint" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5EF2C2"/><stop offset="1" stop-color="#14B8A6"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="26"/></filter>
+    <clipPath id="tile"><rect x="100" y="100" width="824" height="824" rx="184"/></clipPath>
+  </defs>
+  <!-- macOS icon grid: 824 px tile inside a 1024 px canvas -->
+  <rect x="100" y="100" width="824" height="824" rx="184" fill="#0D0F14"/>
+  <g clip-path="url(#tile)">
+    <rect x="557" y="494" width="268" height="288" rx="60" fill="#2EE6B0" opacity=".55" filter="url(#glow)"/>
+    <!-- the Mac: a screen with a corner cut away to hold the sidecar -->
+    <path d="M246 242H727A48 48 0 0 1 775 290V440A24 24 0 0 1 751 464H617A90 90 0 0 0 527 554V663A24 24 0 0 1 503 687H246A48 48 0 0 1 198 639V290A48 48 0 0 1 246 242Z" fill="#E6EAF2"/>
+    <!-- the iPad, held in the cut-out by an even 30 px channel -->
+    <rect x="557" y="494" width="268" height="288" rx="60" fill="url(#mint)"/>
+    <circle cx="623" cy="559" r="22" fill="#FFB454"/>
+  </g>
+</svg>

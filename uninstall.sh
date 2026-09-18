@@ -1,0 +1,52 @@
+#!/bin/bash
+# Removes the SidecarKeeper LaunchAgent, binaries and (optionally) logs.
+#   ./uninstall.sh [--prefix DIR] [--purge-logs]
+set -euo pipefail
+LABEL="com.sidecarkeeper.agent"
+PREFIX="${SIDECARKEEPER_PREFIX:-$HOME/.sidecarkeeper}"
+PURGE=0
+LEFTOVER=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --prefix) PREFIX="${2:?--prefix needs a value}"; shift 2 ;;
+    --purge-logs) PURGE=1; shift ;;
+    -h|--help) sed -n '2,3p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "unknown argument: $1" >&2; exit 2 ;;
+  esac
+done
+PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
+if launchctl print "gui/$(id -u)/$LABEL" >/dev/null 2>&1; then
+  echo "==> Stopping $LABEL"; launchctl bootout "gui/$(id -u)/$LABEL" || true
+fi
+if [ -f "$PLIST" ]; then echo "==> Removing $PLIST"; rm -f "$PLIST"; fi
+# Remove the PATH symlink only if it is still ours.
+if [ -f "$PREFIX/symlink" ]; then
+  LINK="$(cat "$PREFIX/symlink")"
+  if [ -L "$LINK" ] && [ "$(readlink "$LINK")" = "$PREFIX/bin/sidecar-keeper" ]; then
+    echo "==> Removing $LINK"; rm -f "$LINK"
+  fi
+fi
+# Only delete a directory that install.sh marked as ours. The marker must be a real file:
+# a symlinked or merely similar-looking directory is never removed.
+if [ -f "$PREFIX/.sidecarkeeper" ] && [ ! -L "$PREFIX/.sidecarkeeper" ] && [ ! -L "$PREFIX" ]; then
+  case "${PREFIX%/}" in
+    ""|"$HOME"|/usr|/usr/local|/opt|/opt/homebrew|/Applications|/Library|/System|/bin|/sbin|/etc|/var|/tmp)
+      echo "error: refusing to delete $PREFIX" >&2; exit 1 ;;
+  esac
+  echo "==> Removing $PREFIX"; rm -rf "$PREFIX"
+elif [ -e "$PREFIX" ]; then
+  echo "warning: $PREFIX has no SidecarKeeper marker, left untouched" >&2; LEFTOVER=1
+else
+  echo "note: nothing at $PREFIX. If you installed with --prefix, pass the same --prefix here." >&2; LEFTOVER=1
+fi
+# The pause flag lives in the watcher's state directory, which is independent of --prefix.
+rm -f "$HOME/.sidecarkeeper/paused" 2>/dev/null || true
+if [ "$PURGE" -eq 1 ]; then
+  echo "==> Removing logs"
+  rm -f "$HOME/Library/Logs/sidecar-keeper.log" "$HOME/Library/Logs/sidecar-keeper.log.1" "$HOME/Library/Logs/sidecar-keeper.out"
+fi
+if [ "$LEFTOVER" -eq 1 ]; then
+  echo "LaunchAgent removed; the install directory was not (see above)."
+else
+  echo "SidecarKeeper removed."
+fi

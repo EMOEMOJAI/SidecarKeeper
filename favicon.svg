@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <title>SidecarKeeper</title>
+  <!-- Drawn on a 32 grid with even coordinates so every straight edge lands on a pixel at 16x16. -->
+  <rect width="32" height="32" rx="7" fill="#0D0F14"/>
+  <path d="M7 4H21A3 3 0 0 1 24 7V11A1 1 0 0 1 23 12H21A5 5 0 0 0 16 17V19A1 1 0 0 1 15 20H7A3 3 0 0 1 4 17V7A3 3 0 0 1 7 4Z" fill="#E6EAF2"/>
+  <rect x="18" y="14" width="10" height="14" rx="3" fill="#2EE6B0"/>
+</svg>

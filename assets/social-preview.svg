@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640">
+  <defs>
+    <linearGradient id="mint" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5EF2C2"/><stop offset="1" stop-color="#14B8A6"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="26"/></filter>
+  </defs>
+  <rect width="1280" height="640" fill="#0D0F14"/>
+  <g transform="translate(-40 -88) scale(.62)" >
+    <g transform="translate(130 245)">
+      <rect x="557" y="494" width="268" height="288" rx="60" fill="#2EE6B0" opacity=".55" filter="url(#glow)"/>
+      <path d="M246 242H727A48 48 0 0 1 775 290V440A24 24 0 0 1 751 464H617A90 90 0 0 0 527 554V663A24 24 0 0 1 503 687H246A48 48 0 0 1 198 639V290A48 48 0 0 1 246 242Z" fill="#E6EAF2"/>
+      <rect x="557" y="494" width="268" height="288" rx="60" fill="url(#mint)"/>
+      <circle cx="623" cy="559" r="22" fill="#FFB454"/>
+    </g>
+  </g>
+  <g font-family="-apple-system, 'SF Pro Display', Inter, 'Helvetica Neue', Arial, sans-serif" fill="#E6EAF2">
+    <text x="600" y="318" font-size="76" letter-spacing="-1.5"><tspan font-weight="300">Sidecar</tspan><tspan font-weight="700">Keeper</tspan></text>
+    <text x="604" y="376" font-size="29" font-weight="400" fill="#8B93A5">Keeps your iPad connected to your Mac. Quietly.</text>
+  </g>
+</svg>

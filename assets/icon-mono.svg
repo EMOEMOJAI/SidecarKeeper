@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="180 224 663 576" width="663" height="576">
+  <title>SidecarKeeper (single colour)</title>
+  <!-- Uses currentColor: set CSS color, or it renders black. Outline = stroke clipped to the shape. -->
+  <defs><clipPath id="in"><path d="M246 242H727A48 48 0 0 1 775 290V440A24 24 0 0 1 751 464H617A90 90 0 0 0 527 554V663A24 24 0 0 1 503 687H246A48 48 0 0 1 198 639V290A48 48 0 0 1 246 242Z"/></clipPath></defs>
+  <path d="M246 242H727A48 48 0 0 1 775 290V440A24 24 0 0 1 751 464H617A90 90 0 0 0 527 554V663A24 24 0 0 1 503 687H246A48 48 0 0 1 198 639V290A48 48 0 0 1 246 242Z" fill="none" stroke="currentColor" stroke-width="84" clip-path="url(#in)"/>
+  <rect x="557" y="494" width="268" height="288" rx="60" fill="currentColor"/>
+</svg>
