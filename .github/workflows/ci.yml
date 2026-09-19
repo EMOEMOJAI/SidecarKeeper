@@ -27,11 +27,11 @@ jobs:
         with:
           persist-credentials: false
       - name: shellcheck
-        run: shellcheck -S style install.sh uninstall.sh tests/*.sh assets/render.sh scripts/package.sh
+        run: shellcheck -S style install.sh uninstall.sh tests/*.sh assets/render.sh scripts/*.sh
       - name: Relative links in the docs
         run: python3 scripts/check-links.py
       - name: bash syntax
-        run: bash -n install.sh uninstall.sh tests/run.sh tests/fake-launcher.sh assets/render.sh scripts/package.sh
+        run: bash -n install.sh uninstall.sh tests/*.sh assets/render.sh scripts/*.sh
 
   macos:
     name: Build and test (${{ matrix.os }})
@@ -104,3 +104,27 @@ jobs:
           "$prefix/bin/sidecar-keeper" status
           bash "$prefix/uninstall.sh" --purge
           test ! -e "$prefix"
+
+  upstream:
+    name: Upstream pin
+    # Weekly only. The SidecarLauncher commit install.sh pins never moves by itself, so
+    # without this an upstream fix could sit unnoticed for months.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Is the pinned SidecarLauncher commit still current?
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          rc=0
+          scripts/check-upstream.sh --open-issue || rc=$?
+          # 0 = current, 3 = behind and an issue was opened. A stale pin is news, not a
+          # failure, so the badge stays green; anything else means the check itself broke.
+          if [ "$rc" -ne 0 ] && [ "$rc" -ne 3 ]; then exit "$rc"; fi

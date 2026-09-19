@@ -52,7 +52,8 @@ make check   # build + test + bash -n + shellcheck + plist lint. Run before ever
    `experimental` so it cannot block. After that date, delete it from the matrices in
    `ci.yml`, `release.yml` and the tap's `tests.yml`.
 10. The upstream SidecarLauncher commit is pinned by full SHA in `install.sh`. Bump it
-   deliberately, after reading the upstream diff.
+    deliberately, after reading the upstream diff. `make upstream` says whether it is still
+    current; the weekly CI run does the same and opens an issue when it is not.
 
 ## Platform facts worth knowing before changing behaviour
 

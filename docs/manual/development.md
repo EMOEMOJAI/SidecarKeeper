@@ -17,6 +17,13 @@ runner also does a real install and uninstall, from source and from a release bu
 compiler disabled. The weekly run additionally installs the latest release through the
 public one-liner. Linux runs shellcheck and a check of the links in the docs.
 
+The weekly run also compares the SidecarLauncher commit that `install.sh` pins against
+upstream, and opens an issue when it has fallen behind. The pin never moves by itself, which
+is deliberate, so this is the only thing that would notice an upstream fix. Run it yourself
+with `make upstream`. Taking an update means reading the upstream diff, changing
+`UPSTREAM_REF` in `install.sh`, running `make check`, and releasing; the Homebrew formula
+follows the pin on its own.
+
 Pushing a `v*` tag runs the release workflow. It builds the bundle, installs it on every
 runner above, publishes, and then installs the published release through the one-liner on
 Apple silicon and Intel as a final check.
