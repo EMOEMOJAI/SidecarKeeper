@@ -20,7 +20,8 @@ public one-liner. Linux runs shellcheck and a check of the links in the docs.
 The weekly run also compares the SidecarLauncher commit that `install.sh` pins against
 upstream, and opens an issue when it has fallen behind. The pin never moves by itself, which
 is deliberate, so this is the only thing that would notice an upstream fix. Run it yourself
-with `make upstream`. Taking an update means reading the upstream diff, changing
+with `make upstream`. To check that the alert itself still works, start the CI workflow by
+hand and give it an older SidecarLauncher commit in the `upstream_pin` box. Taking an update means reading the upstream diff, changing
 `UPSTREAM_REF` in `install.sh`, running `make check`, and releasing; the Homebrew formula
 follows the pin on its own.
 

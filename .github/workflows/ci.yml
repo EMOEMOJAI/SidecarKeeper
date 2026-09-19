@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      upstream_pin:
+        description: "Pretend install.sh pins this commit, to check the stale-pin alert still works"
+        required: false
+        default: ""
   schedule:
     # Weekly, so a new runner image, a new Swift, or a vanished upstream commit is noticed
     # within days and not at the next release.
@@ -122,9 +127,12 @@ jobs:
       - name: Is the pinned SidecarLauncher commit still current?
         env:
           GH_TOKEN: ${{ github.token }}
+          PIN: ${{ inputs.upstream_pin }}
         run: |
+          # PIN comes in through the environment, never interpolated into this script, and
+          # the script itself rejects anything that is not a 40-character commit SHA.
           rc=0
-          scripts/check-upstream.sh --open-issue || rc=$?
+          scripts/check-upstream.sh --open-issue ${PIN:+--pin "$PIN"} || rc=$?
           # 0 = current, 3 = behind and an issue was opened. A stale pin is news, not a
           # failure, so the badge stays green; anything else means the check itself broke.
           if [ "$rc" -ne 0 ] && [ "$rc" -ne 3 ]; then exit "$rc"; fi
