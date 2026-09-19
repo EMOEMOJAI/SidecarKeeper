@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.3.1
+
+No functional change: the watcher and the installer are identical to 1.3.0, so there is
+nothing to hunt for if you are already running it. Released to exercise the release pipeline
+end to end, including the step that installs the published release through the public
+one-liner on Apple silicon and Intel.
+
+- Documentation: Intel Macs are now built, tested and installed by CI on real hardware, so
+  the README no longer calls them untested.
+- Project: the weekly CI run reports when the pinned SidecarLauncher commit falls behind
+  upstream, opens a tracking issue once per upstream commit, and never fails the build for it.
+
 ## 1.3.0
 
 - Settings file. Every option can now be set in

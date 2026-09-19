@@ -13,7 +13,7 @@
 import AppKit
 import Foundation
 
-let version = "1.3.0"
+let version = "1.3.1"
 // The standard installer's LaunchAgent, then the labels `brew services` uses (new and old).
 // SIDECARKEEPER_AGENT_LABELS overrides the list, for tests.
 let agentLabels = ProcessInfo.processInfo.environment["SIDECARKEEPER_AGENT_LABELS"]?
