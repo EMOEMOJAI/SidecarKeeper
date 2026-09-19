@@ -133,6 +133,7 @@ More in the [FAQ](docs/manual/faq.md), and a table of every log line in
 [Changelog](CHANGELOG.md) · [Contributing](CONTRIBUTING.md) ·
 [Development](docs/manual/development.md)
 
-Tested on macOS 27 on Apple silicon, and built and tested by CI on macOS 14, 15 and 26.
+Used daily on macOS 27 on Apple silicon. CI builds, tests and installs it on macOS 14, 15
+and 26, on Apple silicon and on a real Intel Mac.
 Built on [SidecarLauncher](https://github.com/Ocasio-J/SidecarLauncher) by Jovany Ocasio.
 MIT licensed. Not affiliated with Apple.

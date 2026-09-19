@@ -4,7 +4,7 @@
 
 ## Prerequisites
 
-- macOS 14.2 or newer. Tested on Apple silicon; Intel is expected to work but untested. Sidecar itself must already work
+- macOS 14.2 or newer. Used daily on Apple silicon; CI builds, tests and installs it on Apple silicon and on a real Intel Mac, though Sidecar itself has only been exercised on Apple silicon. Sidecar itself must already work
   between the two devices (same Apple ID, Wi-Fi and Bluetooth on, or a USB cable).
 - Nothing else for the release install. Building from source needs the Xcode Command Line
   Tools and git.

@@ -50,6 +50,7 @@ that framework in any update. If that happens, connects fail and get logged, and
 else on your Mac is affected.
 
 **Which macOS and iPad versions are supported?**
-macOS 14.2 or newer. It is tested on Apple silicon. Intel Macs should work, since nothing
-in it is architecture-specific, but that is untested. Any iPad that already works with
+macOS 14.2 or newer, on Apple silicon or Intel. CI builds, tests and installs it on both,
+including a real Intel Mac. An actual Sidecar session has only been exercised on Apple
+silicon, because CI machines have no iPad. Any iPad that already works with
 Sidecar on your Mac.
