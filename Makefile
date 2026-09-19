@@ -19,6 +19,7 @@ check: build test
 	bash -n install.sh uninstall.sh tests/run.sh tests/fake-launcher.sh assets/render.sh scripts/package.sh
 	@if command -v shellcheck >/dev/null; then shellcheck -S style install.sh uninstall.sh tests/*.sh assets/render.sh scripts/package.sh && echo "shellcheck ok"; else echo "shellcheck not installed, skipped"; fi
 	@plutil -lint launchd/com.sidecarkeeper.plist.template >/dev/null && echo "template ok"
+	@python3 scripts/check-links.py
 
 # Release bundle with prebuilt universal binaries, in dist/.
 package:

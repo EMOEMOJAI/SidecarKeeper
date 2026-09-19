@@ -38,10 +38,16 @@ jobs:
     needs: build
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
+    # macOS 14 runners retire on 2026-11-02 and fail on purpose before that; see ci.yml.
+    continue-on-error: ${{ matrix.experimental }}
     strategy:
       fail-fast: true
       matrix:
-        os: [macos-14, macos-15, macos-26]
+        os: [macos-15, macos-26, macos-15-intel]
+        experimental: [false]
+        include:
+          - os: macos-14
+            experimental: true
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -117,3 +123,23 @@ jobs:
           } | sed 's/^          //' > notes.md
           gh release create "$GITHUB_REF_NAME" --title "SidecarKeeper $version" --notes-file notes.md --verify-tag \
             dist/SidecarKeeper.tar.gz dist/SidecarKeeper.tar.gz.sha256 dist/install.sh
+
+  smoke:
+    name: The public one-liner (${{ matrix.os }})
+    needs: publish
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-15-intel]
+    steps:
+      - name: Install the release exactly as a user would
+        run: |
+          prefix="$RUNNER_TEMP/sidecarkeeper-oneliner"
+          /bin/bash -c "$(curl -fsSL https://github.com/EMOEMOJAI/SidecarKeeper/releases/latest/download/install.sh)" sk --device "CI iPad" --no-link --prefix "$prefix"
+          sleep 5
+          test "v$("$prefix/bin/sidecar-keeper" --version)" = "$GITHUB_REF_NAME"
+          "$prefix/bin/sidecar-keeper" status
+          bash "$prefix/uninstall.sh" --purge
+          test ! -e "$prefix"

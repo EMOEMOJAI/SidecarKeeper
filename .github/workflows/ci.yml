@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  schedule:
+    # Weekly, so a new runner image, a new Swift, or a vanished upstream commit is noticed
+    # within days and not at the next release.
+    - cron: "23 4 * * 1"
 
 permissions:
   contents: read
@@ -24,6 +28,8 @@ jobs:
           persist-credentials: false
       - name: shellcheck
         run: shellcheck -S style install.sh uninstall.sh tests/*.sh assets/render.sh scripts/package.sh
+      - name: Relative links in the docs
+        run: python3 scripts/check-links.py
       - name: bash syntax
         run: bash -n install.sh uninstall.sh tests/run.sh tests/fake-launcher.sh assets/render.sh scripts/package.sh
 
@@ -31,10 +37,17 @@ jobs:
     name: Build and test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
+    # macOS 14 runners retire on 2026-11-02, with failure windows before that. They still back
+    # the "macOS 14.2 or newer" claim, so keep them, but never let them block anything.
+    continue-on-error: ${{ matrix.experimental }}
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-14, macos-15, macos-26]
+        os: [macos-15, macos-26, macos-15-intel]
+        experimental: [false]
+        include:
+          - os: macos-14
+            experimental: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -80,4 +93,14 @@ jobs:
           sleep 5
           "$prefix/bin/sidecar-keeper" status
           bash "$prefix/uninstall.sh" --purge-logs
+          test ! -e "$prefix"
+      - name: The public one-liner, against the latest release
+        # Only on the weekly and manual runs: a push must not depend on what is already released.
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        run: |
+          prefix="$RUNNER_TEMP/sidecarkeeper-oneliner"
+          /bin/bash -c "$(curl -fsSL https://github.com/EMOEMOJAI/SidecarKeeper/releases/latest/download/install.sh)" sk --device "CI iPad" --no-link --prefix "$prefix"
+          sleep 5
+          "$prefix/bin/sidecar-keeper" status
+          bash "$prefix/uninstall.sh" --purge
           test ! -e "$prefix"

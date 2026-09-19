@@ -48,7 +48,10 @@ make check   # build + test + bash -n + shellcheck + plist lint. Run before ever
 8. **Releasing:** bump `version` in `main.swift`, add a matching `## x.y.z` section to
    `CHANGELOG.md`, push, then push the tag `vx.y.z`. The workflow refuses a tag that does
    not match both. Never attach binaries built on a personal machine.
-9. The upstream SidecarLauncher commit is pinned by full SHA in `install.sh`. Bump it
+9. **CI matrix:** the `macos-14` runner retires on 2026-11-02. It is marked
+   `experimental` so it cannot block. After that date, delete it from the matrices in
+   `ci.yml`, `release.yml` and the tap's `tests.yml`.
+10. The upstream SidecarLauncher commit is pinned by full SHA in `install.sh`. Bump it
    deliberately, after reading the upstream diff.
 
 ## Platform facts worth knowing before changing behaviour

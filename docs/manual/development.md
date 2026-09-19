@@ -9,12 +9,18 @@ make check   # build + test + bash -n + shellcheck + plist lint; run before push
 make package # release bundle with universal binaries, in dist/
 ```
 
-CI runs on GitHub-hosted runners for every push and pull request: the same build and
-tests on macOS 14, 15 and 26, a real install and uninstall on each (from source and from a
-release bundle with the compiler disabled), and shellcheck on Linux. Pushing a `v*` tag
-runs the release workflow, which builds the bundle, installs it on all three macOS
-versions, and only then publishes it. The tests run the real watcher binary, so its real gates apply: locally, run them
-with the screen unlocked and the lid open.
+CI runs on GitHub-hosted runners for every push and pull request, and once a week. It
+builds with warnings as errors and runs the tests on macOS 15 and 26 on Apple silicon, on
+macOS 15 on a real Intel Mac, and on macOS 14 for as long as GitHub offers that runner (it
+retires on 2 November 2026, and until then its result is reported but does not block). Each
+runner also does a real install and uninstall, from source and from a release bundle with the
+compiler disabled. The weekly run additionally installs the latest release through the
+public one-liner. Linux runs shellcheck and a check of the links in the docs.
+
+Pushing a `v*` tag runs the release workflow. It builds the bundle, installs it on every
+runner above, publishes, and then installs the published release through the one-liner on
+Apple silicon and Intel as a final check.
+
 `SIDECARLAUNCHER_REF=<full 40-character sha> ./install.sh` builds a different upstream commit.
 
 The icon, favicon and social preview are hand-written SVG in `assets/`. After editing
