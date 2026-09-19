@@ -14,7 +14,13 @@ Key facts:
 
 ## Docs
 
-- [README](https://github.com/EMOEMOJAI/SidecarKeeper/blob/main/README.md): full documentation, configuration, wired mode, troubleshooting table, FAQ
+- [README](https://github.com/EMOEMOJAI/SidecarKeeper/blob/main/README.md): overview, install, daily commands, limits
+- [Install guide](https://github.com/EMOEMOJAI/SidecarKeeper/blob/main/docs/manual/install.md): all four install routes and what each one trusts
+- [Configuration](https://github.com/EMOEMOJAI/SidecarKeeper/blob/main/docs/manual/configuration.md): every command and option
+- [Wired mode](https://github.com/EMOEMOJAI/SidecarKeeper/blob/main/docs/manual/wired-mode.md): USB-only operation
+- [Troubleshooting](https://github.com/EMOEMOJAI/SidecarKeeper/blob/main/docs/manual/troubleshooting.md): what each log line means and what to do
+- [FAQ](https://github.com/EMOEMOJAI/SidecarKeeper/blob/main/docs/manual/faq.md)
+- [How it works](https://github.com/EMOEMOJAI/SidecarKeeper/blob/main/docs/manual/how-it-works.md)
 - [Website](https://emoemojai.github.io/SidecarKeeper/): overview and quick start
 - [Changelog](https://github.com/EMOEMOJAI/SidecarKeeper/blob/main/CHANGELOG.md): release history
 - [AGENTS.md](https://github.com/EMOEMOJAI/SidecarKeeper/blob/main/AGENTS.md): how to build, test and safely modify the project

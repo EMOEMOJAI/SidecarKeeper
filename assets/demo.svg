@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 340" width="760" height="340" role="img" aria-labelledby="d">
+  <desc id="d">SidecarKeeper's log over one day: it notes a lock, stays idle, reconnects the iPad nine seconds after unlock, idles all night with the lid closed, and reconnects in the morning.</desc>
+  <style>
+    text{font:14px ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace}
+    .t{fill:#4D5566} .ok{fill:#5EF2C2} .ev{fill:#FFB454} .idle{fill:#6B7486}
+    .n{fill:#8B93A5;font:13px -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+    .h{fill:#5A6272;font-size:12.5px}
+    .r{animation:i .5s ease backwards}
+    .r1{animation-delay:.3s}.r2{animation-delay:1s}.r3{animation-delay:1.6s}.r4{animation-delay:2.5s}.r5{animation-delay:3.1s}.r6{animation-delay:4s}.r7{animation-delay:4.7s}
+    @keyframes i{from{opacity:0}}
+    @media (prefers-reduced-motion:reduce){.r{animation:none}}
+  </style>
+  <rect x=".5" y=".5" width="759" height="339" rx="14" fill="#0A0C10" stroke="#262C38"/>
+  <circle cx="26" cy="26" r="5.5" fill="#2A303C"/><circle cx="45" cy="26" r="5.5" fill="#2A303C"/><circle cx="64" cy="26" r="5.5" fill="#2A303C"/>
+  <text x="88" y="30" class="h">~/Library/Logs/sidecar-keeper.log</text>
+  <line x1="0" y1="50" x2="760" y2="50" stroke="#1C212B"/>
+  <g class="r r1"><text x="32" y="92" class="t">09:14:02</text><text x="122" y="92" class="ok">ok</text></g>
+  <g class="r r2"><text x="32" y="122" class="t">12:45:44</text><text x="122" y="122" class="ev">session locked</text><text x="410" y="122" class="n">you lock the Mac: Sidecar drops</text></g>
+  <g class="r r3"><text x="32" y="152" class="t">12:45:53</text><text x="122" y="152" class="idle">locked, idle</text><text x="410" y="152" class="n">no attempts, no notifications</text></g>
+  <g class="r r4"><text x="32" y="182" class="t">12:53:13</text><text x="122" y="182" class="ev">session unlocked</text></g>
+  <g class="r r5"><text x="32" y="212" class="t">12:53:22</text><text x="122" y="212" class="ok">reconnected iPad</text><text x="410" y="212" class="n">back 9 s after unlock</text></g>
+  <g class="r r6"><text x="32" y="242" class="t">23:10:31</text><text x="122" y="242" class="idle">lid closed, idle</text><text x="410" y="242" class="n">overnight: one line</text></g>
+  <g class="r r7"><text x="32" y="272" class="t">07:58:09</text><text x="122" y="272" class="ok">reconnected iPad</text><text x="410" y="272" class="n">lid opens: back again</text></g>
+  <text x="32" y="316" class="n">A whole day in seven lines. It waits when a connect cannot work, and acts the moment it can.</text>
+</svg>
