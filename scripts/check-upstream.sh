@@ -59,10 +59,14 @@ say ""
 say "$commits"
 
 if [ "$OPEN_ISSUE" -eq 1 ]; then
-  open="$(gh issue list --state open --limit 100 --json number,title \
-    --jq "map(select(.title | startswith(\"$TITLE\"))) | .[0].number // empty")"
-  if [ -n "$open" ]; then
-    echo "Issue #$open is already open; saying nothing further."
+  # Keyed on the upstream commit, and closed issues count: deciding not to take an update is
+  # a decision, and repeating the same notice every week would train everyone to ignore it.
+  # A later upstream commit is a different key, so a genuinely new change is still reported.
+  marker="<!-- upstream-head: $head_sha -->"
+  said="$(gh issue list --state all --limit 100 --json number,body \
+    --jq "map(select(.body != null and (.body | contains(\"$marker\")))) | .[0].number // empty")"
+  if [ -n "$said" ]; then
+    echo "Already reported in issue #$said; saying nothing further."
   else
     body="$(cat <<BODY
 \`install.sh\` pins [\`${PIN:0:12}\`]($UPSTREAM_URL/commit/$PIN) of [$UPSTREAM]($UPSTREAM_URL).
@@ -74,10 +78,12 @@ The pin is deliberate, so nothing here changes by itself. To take the update: re
 above, set \`UPSTREAM_REF\` in \`install.sh\` to \`${head_sha:-the new commit}\`, run
 \`make check\`, and release as usual. The Homebrew formula follows the pin on its own.
 
-Closing this without changing the pin is a fine outcome. This check will speak up again only
-if upstream moves further.
+Closing this without changing the pin is a fine outcome. This check will not raise the same
+commit again, whether or not the issue stays open; it speaks up again when upstream moves
+further.
 
 <sub>Opened by \`scripts/check-upstream.sh\` from the weekly CI run.</sub>
+$marker
 BODY
 )"
     gh issue create --title "$TITLE (${ahead} behind)" --body "$body" >/dev/null && echo "Opened an issue."
