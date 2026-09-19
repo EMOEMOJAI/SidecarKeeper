@@ -37,6 +37,9 @@ brew install emoemojai/tap/sidecarkeeper
 brew services start sidecarkeeper
 ```
 
+After `brew upgrade`, run `brew services restart sidecarkeeper`: the upgrade replaces the
+binary but leaves the old one running until then.
+
 The Homebrew service keeps the first reachable iPad connected. To pick a specific iPad or
 use wired mode, put it in the [settings file](configuration.md#settings-file). Do not run both, or two watchers will compete;
 `sidecar-keeper status` warns you if that happens.
