@@ -13,7 +13,7 @@
 import AppKit
 import Foundation
 
-let version = "1.2.1"
+let version = "1.3.0"
 // The standard installer's LaunchAgent, then the labels `brew services` uses (new and old).
 // SIDECARKEEPER_AGENT_LABELS overrides the list, for tests.
 let agentLabels = ProcessInfo.processInfo.environment["SIDECARKEEPER_AGENT_LABELS"]?
@@ -34,8 +34,17 @@ struct Config {
 }
 
 let home = NSHomeDirectory()
-let stateDir = ProcessInfo.processInfo.environment["SIDECARKEEPER_STATE_DIR"] ?? home + "/.sidecarkeeper"
+// Settings and the pause flag live here, not in the install directory, so they are the same
+// for every install route and survive a reinstall.
+let stateDirOverride = ProcessInfo.processInfo.environment["SIDECARKEEPER_STATE_DIR"]
+let stateDir = stateDirOverride ?? home + "/Library/Application Support/SidecarKeeper"
 let pauseFile = stateDir + "/paused"
+let legacyPauseFile = home + "/.sidecarkeeper/paused" // where 1.2 and earlier kept it
+let configFile = stateDir + "/config"
+func isPaused() -> Bool {
+    let fm = FileManager.default
+    return fm.fileExists(atPath: pauseFile) || (stateDirOverride == nil && fm.fileExists(atPath: legacyPauseFile))
+}
 let defaultLog = home + "/Library/Logs/sidecar-keeper.log"
 
 func usage() -> String {
@@ -44,6 +53,7 @@ func usage() -> String {
            sidecar-keeper pause             stop reconnecting (e.g. you disconnected on purpose)
            sidecar-keeper resume            start reconnecting again
            sidecar-keeper status [--log PATH]
+           sidecar-keeper config [--init]   show the settings file, or create a commented one
            sidecar-keeper --version | --help
 
     options:
@@ -61,11 +71,70 @@ func usage() -> String {
                          when the cable comes back, because a wired session never recovers
                          by itself.
       --usb-match TEXT   USB product name that means "the iPad is cabled". Default: iPad
+
+    The same options can be set in a settings file, one `name = value` per line, for example
+    `device = My iPad` or `wired = true`. Flags given on the command line win over the file.
+    File: ~/Library/Application Support/SidecarKeeper/config   (`sidecar-keeper config --init`)
     """
 }
 
 func die(_ msg: String) -> Never {
     FileHandle.standardError.write("\(msg)\n".data(using: .utf8)!); exit(2)
+}
+
+let configTemplate = """
+    # SidecarKeeper settings. Remove the leading # to set a value, then restart the watcher:
+    #   brew services restart sidecarkeeper
+    #   launchctl kickstart -k gui/$(id -u)/com.sidecarkeeper.agent     (standard installer)
+    # Command-line flags, such as the ones install.sh writes into its LaunchAgent, win over
+    # this file. If this file has a mistake in it, the watcher says so in its log and stays
+    # idle until it is fixed, rather than guess.
+
+    # device = My iPad
+    # wired = true
+    # usb-match = iPad
+    # interval = 15
+    # settle = 8
+    # timeout = 30
+
+    """
+
+/// Reads the settings file into the equivalent command-line flags. Every value is checked
+/// here, so that a mistake is reported with its line number instead of ending the process:
+/// a watcher that exits is restarted by launchd every few seconds.
+func loadConfig() -> (args: [String], error: String?) {
+    guard let text = try? String(contentsOfFile: configFile, encoding: .utf8) else { return ([], nil) }
+    var args: [String] = []
+    for (n, raw) in text.components(separatedBy: .newlines).enumerated() {
+        let line = raw.trimmingCharacters(in: .whitespaces)
+        if line.isEmpty || line.hasPrefix("#") { continue }
+        guard let eq = line.firstIndex(of: "=") else { return ([], "line \(n + 1): expected name = value") }
+        let key = line[..<eq].trimmingCharacters(in: .whitespaces).lowercased()
+        var value = line[line.index(after: eq)...].trimmingCharacters(in: .whitespaces)
+        if value.count >= 2, let q = value.first, q == "\"" || q == "'", value.last == q {
+            value = String(value.dropFirst().dropLast())
+        }
+        if value.isEmpty { return ([], "line \(n + 1): \(key) has no value") }
+        switch key {
+        case "device", "launcher", "log", "usb-match":
+            args += ["--" + key, value]
+        case "interval", "settle", "timeout":
+            let minimum: TimeInterval = key == "settle" ? 0 : 1
+            guard let v = TimeInterval(value), v.isFinite, v >= minimum, v <= 86_400 else {
+                return ([], "line \(n + 1): \(key) must be a number of seconds between \(Int(minimum)) and 86400")
+            }
+            args += ["--" + key, value]
+        case "wired":
+            switch value.lowercased() {
+            case "true", "yes", "on", "1": args.append("--wired")
+            case "false", "no", "off", "0": break
+            default: return ([], "line \(n + 1): wired must be true or false")
+            }
+        default:
+            return ([], "line \(n + 1): unknown setting \"\(key)\"")
+        }
+    }
+    return (args, nil)
 }
 
 func parseOptions(_ argv: [String]) -> Config {
@@ -169,9 +238,27 @@ case "pause":
     print("paused: SidecarKeeper will not reconnect until `sidecar-keeper resume`"); exit(0)
 case "resume":
     try? FileManager.default.removeItem(atPath: pauseFile)
+    if stateDirOverride == nil { try? FileManager.default.removeItem(atPath: legacyPauseFile) }
     print("resumed: reconnecting on the next tick"); exit(0)
+case "config":
+    if argv == ["--init"] {
+        if FileManager.default.fileExists(atPath: configFile) { die("\(configFile) already exists; edit it instead") }
+        try? FileManager.default.createDirectory(atPath: stateDir, withIntermediateDirectories: true)
+        guard FileManager.default.createFile(atPath: configFile, contents: configTemplate.data(using: .utf8)) else {
+            die("cannot write \(configFile)")
+        }
+        print("created \(configFile)\nEdit it, then restart the watcher for the change to apply.")
+        exit(0)
+    }
+    if !argv.isEmpty { die("usage: sidecar-keeper config [--init]") }
+    let loaded = loadConfig()
+    print("file:   \(configFile)\(FileManager.default.fileExists(atPath: configFile) ? "" : "  (not created; `sidecar-keeper config --init`)")")
+    if let e = loaded.error { print("error:  \(e)\n        the watcher stays idle until this is fixed"); exit(1) }
+    print("in use: \(loaded.args.isEmpty ? "defaults" : loaded.args.joined(separator: " "))")
+    exit(0)
 case "status":
-    let cfg = parseOptions(argv)
+    let loaded = loadConfig()
+    let cfg = parseOptions((loaded.error == nil ? loaded.args : []) + argv)
     // Report every agent that is loaded: two at once means two watchers competing.
     var found: [String] = []
     for label in agentLabels {
@@ -184,7 +271,9 @@ case "status":
     }
     print("agent:  \(found.isEmpty ? "not loaded" : found.joined(separator: ", "))")
     if found.count > 1 { print("        warning: more than one watcher is loaded; stop one of them") }
-    print("paused: \(FileManager.default.fileExists(atPath: pauseFile) ? "yes" : "no")")
+    print("paused: \(isPaused() ? "yes" : "no")")
+    if let e = loaded.error { print("config: ERROR in \(configFile): \(e)") }
+    else if !loaded.args.isEmpty { print("config: \(loaded.args.joined(separator: " "))") }
     print("usb:    \(usbAttached(cfg.usbMatch) ? "\(cfg.usbMatch) attached by cable" : "no \(cfg.usbMatch) on USB") (only matters with --wired)")
     print("log:    \(cfg.logPath)")
     if let text = try? String(contentsOfFile: cfg.logPath, encoding: .utf8) {
@@ -195,7 +284,9 @@ default:
     die("unknown command: \(command)\n\(usage())")
 }
 
-let cfg = parseOptions(argv)
+// Settings file first, real flags after, so that a flag on the command line wins.
+let loadedConfig = loadConfig()
+let cfg = parseOptions((loadedConfig.error == nil ? loadedConfig.args : []) + argv)
 
 // MARK: - State
 
@@ -261,7 +352,9 @@ func tick() {
     // Sample the cable first, even while locked or paused, so an unplug is never missed.
     let cabled = !cfg.wired || usbAttached(cfg.usbMatch)
     if !cabled { cableWasAbsent = true }
-    if FileManager.default.fileExists(atPath: pauseFile) { log("paused, idle"); return }
+    // A broken settings file must never turn into a guess about which iPad to connect.
+    if let e = loadedConfig.error { log("settings file error (\(e)), idle until fixed: \(configFile)"); return }
+    if isPaused() { log("paused, idle"); return }
     guard screensAwake else { log("screen off, idle"); return }
     // The lock notifications are best-effort and only report changes, so also ask the session.
     guard unlocked && !sessionLocked() else { log("locked, idle"); return }

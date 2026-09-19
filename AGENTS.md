@@ -35,7 +35,7 @@ make check   # build + test + bash -n + shellcheck + plist lint. Run before ever
    LaunchAgent. To exercise them, pass a throwaway `--prefix` and `--no-link`, and uninstall
    afterwards. CI does this on every push.
 3. **Always pass `--log` when running the watcher by hand**, plus
-   `SIDECARKEEPER_STATE_DIR` and `SIDECARKEEPER_USB_PROBE` pointing at temp paths, so the
+   `SIDECARKEEPER_STATE_DIR` (it holds the settings file and the pause flag) and `SIDECARKEEPER_USB_PROBE` pointing at temp paths, so the
    user's real log and pause state are untouched.
 4. **The central invariant: never attempt a connect that cannot succeed.** Every gate in
    `tick()` exists because a failed attempt is user-visible. A change that adds a connect

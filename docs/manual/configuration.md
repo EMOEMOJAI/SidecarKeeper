@@ -15,7 +15,36 @@ Without `pause`, a manual disconnect is indistinguishable from a drop, so the wa
 reconnects within about 15 s. If the command is not on your `PATH`, use
 `~/.sidecarkeeper/bin/sidecar-keeper`.
 
-## Configuration
+## Settings file
+
+The easiest way to change an option, and the only way under `brew services`, is the settings
+file:
+
+```sh
+sidecar-keeper config --init   # creates a commented template, never overwrites
+open -e "$HOME/Library/Application Support/SidecarKeeper/config"
+sidecar-keeper config          # shows what is in effect, or what is wrong
+```
+
+```
+device = My iPad
+wired = true
+interval = 15
+```
+
+One `name = value` per line. Names are the option names below without the dashes, `wired`
+takes `true` or `false`, values may be quoted, and `#` starts a comment. Restart the watcher to
+apply a change: `brew services restart sidecarkeeper`, or
+`launchctl kickstart -k gui/$(id -u)/com.sidecarkeeper.agent` for the standard installer.
+
+Flags on the command line win over the file. The standard installer writes `--device` and
+friends into its LaunchAgent, so for that route either re-run the installer or edit the plist.
+
+If the file contains a mistake, the watcher logs `settings file error (line N: ...)` and stays
+idle until you fix it. It will not fall back to the defaults, because "the first reachable
+iPad" could be the wrong one.
+
+## Command-line options
 
 Everything is a command-line flag on `sidecar-keeper`, so edit the LaunchAgent plist (or
 re-run `install.sh`) to change it:

@@ -4,7 +4,7 @@
 
 ```sh
 make build   # build/sidecar-keeper
-make test    # 45 behaviour tests against a fake SidecarLauncher, no iPad needed (~40 s)
+make test    # 56 behaviour tests against a fake SidecarLauncher, no iPad needed (~40 s)
 make check   # build + test + bash -n + shellcheck + plist lint; run before pushing
 make package # release bundle with universal binaries, in dist/
 ```

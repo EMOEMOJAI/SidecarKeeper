@@ -66,7 +66,8 @@ sidecar-keeper resume   # start again
 The log at `~/Library/Logs/sidecar-keeper.log` records every decision, one line per change.
 Remove everything with `~/.sidecarkeeper/uninstall.sh`.
 
-To pick a specific iPad, tune the timing, or force the USB cable, see
+To pick a specific iPad, tune the timing, or force the USB cable, run
+`sidecar-keeper config --init` and edit the settings file it creates. See
 [configuration](docs/manual/configuration.md) and [wired mode](docs/manual/wired-mode.md).
 
 ## Honest limits

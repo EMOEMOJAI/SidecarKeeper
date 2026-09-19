@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.3.0
+
+- Settings file. Every option can now be set in
+  `~/Library/Application Support/SidecarKeeper/config`, one `name = value` per line, so a
+  watcher started by `brew services` can be told which iPad to use or to use wired mode.
+  `sidecar-keeper config --init` creates a commented template and `sidecar-keeper config`
+  shows what is in effect. Command-line flags win over the file.
+- A mistake in the settings file is reported in the log with its line number, and the watcher
+  stays idle until it is fixed, rather than guess which iPad to connect.
+- The pause flag moved to the same directory, so it no longer lives inside the install
+  directory. A pause made by an older version is still honoured.
+- `uninstall.sh` keeps your settings unless you pass `--purge`.
+
 ## 1.2.1
 
 - `sidecar-keeper status` recognises an agent started by `brew services`, names which

@@ -13,6 +13,7 @@ Start with `sidecar-keeper status`. What the log lines mean:
 | `<name> not reachable, idle` | The iPad is not in `devices` | Unlock it, bring it closer or plug in USB, check the name with `~/.sidecarkeeper/bin/SidecarLauncher devices` |
 | `locked, idle` / `screen off, idle` / `lid closed, idle` | macOS cannot host Sidecar right now | Nothing, it resumes by itself |
 | `paused, idle` | You ran `pause` | `sidecar-keeper resume` |
+| `settings file error (line N: ...)` | A mistake in the settings file | Run `sidecar-keeper config`, fix the line it names, restart the watcher |
 | `wired mode: no iPad on USB, idle` | `--wired` is on and no cable is detected | Plug the iPad in, or see [Wired mode](wired-mode.md) |
 | `cable is back, restarting the wired session` | A dead wired session was replaced | Nothing |
 | `fail: ... WiFiNotEnabled` (-203) | The iPad is locked or asleep | Unlock the iPad |

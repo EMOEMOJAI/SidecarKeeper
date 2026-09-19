@@ -38,7 +38,7 @@ brew services start sidecarkeeper
 ```
 
 The Homebrew service keeps the first reachable iPad connected. To pick a specific iPad or
-use wired mode, use one of the other routes. Do not run both, or two watchers will compete;
+use wired mode, put it in the [settings file](configuration.md#settings-file). Do not run both, or two watchers will compete;
 `sidecar-keeper status` warns you if that happens.
 
 **3. Download the release.** Get `SidecarKeeper.tar.gz` from the
@@ -89,6 +89,7 @@ change it back.
 ```sh
 ~/.sidecarkeeper/uninstall.sh              # stops the agent, removes plist and ~/.sidecarkeeper
 ~/.sidecarkeeper/uninstall.sh --purge-logs # also removes the log files
+~/.sidecarkeeper/uninstall.sh --purge      # logs and your settings file too
 ```
 
 Both scripts accept `--prefix DIR` (or `SIDECARKEEPER_PREFIX`) to use a different install

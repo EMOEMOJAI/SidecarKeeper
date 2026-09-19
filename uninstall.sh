@@ -1,6 +1,7 @@
 #!/bin/bash
 # Removes the SidecarKeeper LaunchAgent, binaries and (optionally) logs.
-#   ./uninstall.sh [--prefix DIR] [--purge-logs]
+#   ./uninstall.sh [--prefix DIR] [--purge-logs] [--purge]
+# Your settings file is kept unless you pass --purge, so a reinstall picks it up again.
 set -euo pipefail
 
 # Everything runs inside main, called on the last line, so bash has read the whole file
@@ -12,12 +13,14 @@ main() {
   if grep -q '^SidecarKeeper install directory' "$SELF_DIR/.sidecarkeeper" 2>/dev/null; then DEFAULT_PREFIX="$SELF_DIR"; else DEFAULT_PREFIX="$HOME/.sidecarkeeper"; fi
   PREFIX="${SIDECARKEEPER_PREFIX:-$DEFAULT_PREFIX}"
   PURGE=0
+  PURGE_SETTINGS=0
   LEFTOVER=0
   while [ $# -gt 0 ]; do
     case "$1" in
       --prefix) PREFIX="${2:?--prefix needs a value}"; shift 2 ;;
       --purge-logs) PURGE=1; shift ;;
-      -h|--help) echo "usage: uninstall.sh [--prefix DIR] [--purge-logs]"; exit 0 ;;
+      --purge) PURGE=1; PURGE_SETTINGS=1; shift ;;
+      -h|--help) echo "usage: uninstall.sh [--prefix DIR] [--purge-logs] [--purge]   (--purge: logs and settings too)"; exit 0 ;;
       *) echo "unknown argument: $1" >&2; exit 2 ;;
     esac
   done
@@ -48,7 +51,13 @@ main() {
     echo "note: nothing at $PREFIX. If you installed with --prefix, pass the same --prefix here." >&2; LEFTOVER=1
   fi
   # The pause flag lives in the watcher's state directory, which is independent of --prefix.
-  rm -f "$HOME/.sidecarkeeper/paused" 2>/dev/null || true
+  STATE="$HOME/Library/Application Support/SidecarKeeper"
+  rm -f "$STATE/paused" "$HOME/.sidecarkeeper/paused" 2>/dev/null || true
+  if [ "$PURGE_SETTINGS" -eq 1 ]; then
+    echo "==> Removing settings"; rm -f "$STATE/config"; rmdir "$STATE" 2>/dev/null || true
+  elif [ -f "$STATE/config" ]; then
+    echo "note: kept your settings in $STATE/config (use --purge to remove them too)"
+  fi
   if [ "$PURGE" -eq 1 ]; then
     echo "==> Removing logs"
     rm -f "$HOME/Library/Logs/sidecar-keeper.log" "$HOME/Library/Logs/sidecar-keeper.log.1" "$HOME/Library/Logs/sidecar-keeper.out"

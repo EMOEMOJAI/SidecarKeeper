@@ -130,6 +130,29 @@ unplug; watch new 2 --wired --usb-match "keyboard"
 argv_is "--usb-match picks the product name, ignoring case" "connect Other iPad -wired"
 plug
 
+echo "settings file"
+CFG="$SIDECARKEEPER_STATE_DIR/config"; mkdir -p "$SIDECARKEEPER_STATE_DIR"
+printf '# a comment\n\ndevice = Nope\n' > "$CFG"; watch new 2
+has    "device comes from the file"        "Nope not reachable, idle"
+ncalls "and nothing else is connected"     0
+watch new 2 --device "other ipad"
+has    "a command-line flag wins over the file" "reconnected Other iPad"
+printf 'wired = true\ninterval = 1\n' > "$CFG"; plug; watch new 2
+argv_is "wired = true in the file connects with -wired" "connect Other iPad -wired"
+printf 'device = "Joe\x27s iPad"\n' > "$CFG"; watch ok 2
+if [ "$(head -1 <<<"$CALLS")" = $'Joe\xe2\x80\x99s iPad' ]; then ok "quoted value with an apostrophe"; else bad "quoted value with an apostrophe"; fi
+printf 'device = Other iPad\nspeed = fast\n' > "$CFG"; watch new 3
+has    "a mistake in the file is reported with its line" "settings file error (line 2: unknown setting"
+ncalls "and the watcher stays idle instead of guessing" 0
+printf 'interval = soon\n' > "$CFG"; watch new 2
+has    "a bad number is reported, not fatal"  "settings file error (line 1: interval must be"
+rm -f "$CFG"; LOG=""; CALLS=""
+if "$BIN" config --init >/dev/null && [ -s "$CFG" ]; then ok "config --init writes a template"; else bad "config --init writes a template"; fi
+if grep -qvE '^(#.*)?$' "$CFG"; then bad "the template sets nothing by itself"; else ok "the template sets nothing by itself"; fi
+"$BIN" config --init >/dev/null 2>&1; rc=$?
+if [ "$rc" -eq 2 ]; then ok "config --init never overwrites"; else bad "config --init never overwrites (exit $rc)"; fi
+rm -f "$CFG"
+
 echo "status finds whichever agent is loaded"
 LOG=""; CALLS=""
 out="$(SIDECARKEEPER_AGENT_LABELS="com.example.definitely-not-loaded" "$BIN" status --log "$WORK/log")"
