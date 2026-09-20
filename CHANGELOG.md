@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.4.0
+
+- `pause --for 1h` pauses reconnection for a duration, preserving the expiry across
+  watcher restarts. Plain `pause` remains indefinite; `resume` ends either kind early.
+- `status` shows the watcher's latest observed state, retry eligibility countdown and
+  last successful reconnection. Stopped or stale observations are identified explicitly.
+- Unreadable settings, including broken symlinks, keep the watcher idle instead of
+  silently choosing defaults. `config` distinguishes file settings from running options.
+- Test cleanup targets its own child process; configuration comment syntax is documented.
+
 ## 1.3.1
 
 No functional change: the watcher and the installer are identical to 1.3.0, so there is

@@ -45,6 +45,7 @@ other install options and configuration.
 ```sh
 sidecar-keeper status   # show service state and recent log entries
 sidecar-keeper pause    # stop reconnecting when you disconnect on purpose
+sidecar-keeper pause --for 1h  # resume automatically after an hour
 sidecar-keeper resume   # start reconnecting again
 ```
 

@@ -21,13 +21,21 @@ export SIDECARKEEPER_USB_PROBE="$WORK/usb-probe"
 plug()   { echo '    "USB Product Name" = "iPad"' > "$WORK/usb"; }
 unplug() { echo '    "USB Product Name" = "Some Keyboard"' > "$WORK/usb"; }
 PASS=0; FAIL=0
+status() { SIDECARKEEPER_AGENT_LABELS="com.example.definitely-not-loaded" "$BIN" status --log "$WORK/log"; }
 
-# watch MODE SECONDS [watcher args...]  -> fills $LOG and $CALLS
+# watch MODE SECONDS [watcher args...] -> captures status while alive, then stops the watcher.
 watch() {
   local mode="$1" secs="$2"; shift 2
   echo "$mode" > "$WORK/mode"; rm -f "$WORK/calls" "$WORK/argv" "$WORK/probes" "$WORK/disconnected" "$WORK/log"
   "$BIN" --launcher "$WORK/SidecarLauncher" --log "$WORK/log" --interval 1 "$@" &
-  local pid=$!; sleep "$secs"; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null
+  local pid=$! attempt; sleep "$secs"
+  # A poll may be in flight at the sampling instant; allow its bounded fake probe to finish.
+  for ((attempt=0; attempt<20; attempt++)); do
+    STATUS="$(status)"
+    if ! grep -qE '^watcher: (checking device availability|connecting |disconnecting )' <<<"$STATUS"; then break; fi
+    sleep 0.1
+  done
+  kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null
   LOG="$(cat "$WORK/log" 2>/dev/null)"; CALLS="$(cat "$WORK/calls" 2>/dev/null)"; ARGV="$(cat "$WORK/argv" 2>/dev/null)"
 }
 # The launcher's first commands must be exactly $2 (later ticks may repeat the connect).
@@ -37,6 +45,96 @@ bad()  { FAIL=$((FAIL+1)); echo "  FAIL: $1"; echo "    log:   ${LOG//$'\n'/$'\n
 has()  { if grep -qF -- "$2" <<<"$LOG"; then ok "$1"; else bad "$1 (log lacks: $2)"; fi; }
 hasnt(){ if grep -qF -- "$2" <<<"$LOG"; then bad "$1 (log has: $2)"; else ok "$1"; fi; }
 ncalls(){ local n; n=$(grep -c . <<<"$CALLS"); if [ "$n" -eq "$2" ]; then ok "$1"; else bad "$1 (expected $2 connect calls, got $n)"; fi; }
+status_has() { if grep -qF -- "$2" <<<"$STATUS"; then ok "$1"; else bad "$1 (status lacks: $2; got: $STATUS)"; fi; }
+
+# These checks remain useful with a locked screen: none requires a connect to succeed.
+echo "timed pause and live status"
+LOG=""; CALLS=""; STATUS="$(status)"
+status_has "missing snapshot is unavailable" "watcher: unavailable"
+"$BIN" pause --for 1h >/dev/null
+watch new 1
+status_has "timed pause has an expiry" "paused: yes (until "
+status_has "watcher reports paused" "watcher: paused"
+ncalls "timed pause prevents connect" 0
+STATUS="$(status)"; status_has "stopped watcher is stale" "watcher: stale"
+watch new 1
+status_has "timed pause survives watcher restart" "watcher: paused"
+ncalls "restart does not bypass timed pause" 0
+saved_pause="$(cat "$SIDECARKEEPER_STATE_DIR/paused")"
+for duration in 0s -1h nanh infs 1e300d 366d 10 1w; do
+  "$BIN" pause --for "$duration" >/dev/null 2>&1; rc=$?
+  if [ "$rc" -eq 2 ] && [ "$(cat "$SIDECARKEEPER_STATE_DIR/paused")" = "$saved_pause" ]; then
+    ok "invalid duration leaves pause intact: $duration"
+  else bad "invalid duration leaves pause intact: $duration"; fi
+done
+for args in '--for' '--bogus' '--for 1h extra'; do
+  # shellcheck disable=SC2086
+  "$BIN" pause $args >/dev/null 2>&1; rc=$?
+  if [ "$rc" -eq 2 ]; then ok "rejects pause arguments: $args"; else bad "rejects pause arguments: $args"; fi
+done
+for duration in 30s 15m 1.5h 1d; do
+  if "$BIN" pause --for "$duration" >/dev/null; then ok "accepts duration: $duration"; else bad "accepts duration: $duration"; fi
+done
+"$BIN" resume >/dev/null
+STATUS="$(status)"; status_has "resume ends a timed pause early" "paused: no"
+"$BIN" pause --for 1h >/dev/null; "$BIN" pause >/dev/null
+STATUS="$(status)"; status_has "plain pause replaces a timer" "paused: yes (until resumed)"
+printf 'broken expiry\n' > "$SIDECARKEEPER_STATE_DIR/paused"
+watch new 1
+status_has "damaged pause remains paused" "watcher: paused"
+ncalls "damaged pause never connects" 0
+rm -f "$SIDECARKEEPER_STATE_DIR/paused"
+ln -s "$WORK/missing-pause" "$SIDECARKEEPER_STATE_DIR/paused"
+watch new 1
+status_has "broken pause symlink remains paused" "watcher: paused"
+ncalls "broken pause symlink never connects" 0
+"$BIN" resume >/dev/null; "$BIN" pause >/dev/null
+
+# A fresh PID alone is insufficient: reject expired snapshots and a mismatched process start.
+echo new > "$WORK/mode"
+"$BIN" --launcher "$WORK/SidecarLauncher" --log "$WORK/log" --interval 60 & pid=$!
+sleep 1
+cp "$SIDECARKEEPER_STATE_DIR/status.json" "$WORK/snapshot"
+python3 - "$SIDECARKEEPER_STATE_DIR/status.json" <<'PY'
+import json, pathlib, sys
+p = pathlib.Path(sys.argv[1]); data = json.loads(p.read_text())
+data['retryAt'] = 1e300
+p.write_text(json.dumps(data))
+PY
+STATUS="$(status)"; rc=$?
+if [ "$rc" -eq 0 ]; then ok "out-of-range status date does not crash"; else bad "out-of-range status date does not crash"; fi
+status_has "out-of-range status date is unavailable" "watcher: unavailable"
+cp "$WORK/snapshot" "$SIDECARKEEPER_STATE_DIR/status.json"
+python3 - "$SIDECARKEEPER_STATE_DIR/status.json" <<'PY'
+import json, pathlib, sys
+p = pathlib.Path(sys.argv[1]); data = json.loads(p.read_text())
+data['freshUntil'] = 0
+p.write_text(json.dumps(data))
+PY
+STATUS="$(status)"; status_has "expired snapshot is stale even with a live PID" "watcher: stale"
+cp "$WORK/snapshot" "$SIDECARKEEPER_STATE_DIR/status.json"
+python3 - "$SIDECARKEEPER_STATE_DIR/status.json" <<'PY'
+import json, pathlib, sys
+p = pathlib.Path(sys.argv[1]); data = json.loads(p.read_text())
+data['processStart'] = 'a different process'
+p.write_text(json.dumps(data))
+PY
+STATUS="$(status)"; status_has "reused PID cannot make an old snapshot live" "watcher: stale"
+kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null
+printf 'invalid json\n' > "$SIDECARKEEPER_STATE_DIR/status.json"
+STATUS="$(status)"; status_has "damaged snapshot is unavailable" "watcher: unavailable"
+rm -f "$SIDECARKEEPER_STATE_DIR/status.json"
+
+unplug; "$BIN" pause --for 2s >/dev/null
+watch new 3 --wired
+status_has "timed pause expires automatically" "paused: no"
+ncalls "expiry cannot bypass connection gates" 0
+printf 'unknown = value\n' > "$SIDECARKEEPER_STATE_DIR/config"
+watch new 1
+status_has "settings error is visible in live status" "watcher: settings file error"
+ncalls "expired pause cannot bypass invalid settings" 0
+rm -f "$SIDECARKEEPER_STATE_DIR/config"
+"$BIN" resume >/dev/null
 
 echo "broken settings symlink"
 mkdir -p "$SIDECARKEEPER_STATE_DIR"
@@ -50,6 +148,8 @@ rm -f "$SIDECARKEEPER_STATE_DIR/config"
 
 watch ok 2
 if grep -qE "lid closed|locked, idle" <<<"$LOG"; then
+  if grep -q 'locked, idle' <<<"$LOG"; then status_has "live status reports the locked gate" "watcher: locked"
+  else status_has "live status reports the lid gate" "watcher: lid closed"; fi
   # CI sets SK_TESTS_NO_SKIP so that a skipped run can never look like a pass.
   if [ -n "${SK_TESTS_NO_SKIP:-}" ]; then echo "FAIL: watcher is idle (lid closed or locked) and SK_TESTS_NO_SKIP is set"; exit 1; fi
   echo "$PASS passed, $FAIL failed; remaining tests SKIP: lid closed or session locked."
@@ -71,17 +171,27 @@ ncalls "unknown device never connects"    0
 echo "reconnect"
 watch new 2
 has    "logs reconnect"                   "reconnected Other iPad"
+status_has "live status reports successful connection" "watcher: connected to Other iPad"
+if grep -qE '^last reconnect: [0-9].*\(Other iPad\)$' <<<"$STATUS"; then ok "records last reconnection and iPad"; else bad "records last reconnection and iPad"; fi
+last_reconnect="$(grep '^last reconnect:' <<<"$STATUS")"
+watch ok 2
+if [ "$(grep '^last reconnect:' <<<"$STATUS")" = "$last_reconnect" ]; then ok "already-connected checks and restart preserve last reconnection"; else bad "already-connected checks and restart preserve last reconnection"; fi
+
+"$BIN" pause --for 2s >/dev/null; watch new 4
+has "expired pause reconnects automatically when eligible" "reconnected Other iPad"
 
 echo "no devices at all"
 watch none 2
 has    "idle when nothing reachable"      "device not reachable, idle"
 ncalls "no connect attempted"             0
+status_has "live status explains device absence" "watcher: device not reachable"
 
 echo "failure backoff (each failed connect is a user-visible notification)"
 watch fail 4
 has    "first failure waits 30s"          "(retry in 30s)"
 has    "hints at a locked iPad"           "[is the iPad unlocked?]"
 ncalls "only one attempt in 4s"           1
+if grep -qE '^watcher: waiting to retry connection \(eligible in [0-9]+s\)' <<<"$STATUS"; then ok "live status shows retry countdown"; else bad "live status shows retry countdown"; fi
 watch vd 4
 has    "display errors wait 5 min"        "(retry in 300s)"
 ncalls "only one attempt in 4s"           1
@@ -135,6 +245,7 @@ if grep -q -- "-wired" <<<"$ARGV"; then bad "normal mode never passes -wired"; e
 unplug; watch new 3 --wired
 has    "no cable: idle"                   "wired mode: no iPad on USB, idle"
 ncalls "no cable: never connects (a wired connect without a cable fails and notifies)" 0
+status_has "live status explains missing cable" "watcher: waiting for USB cable"
 plug; watch new 2 --wired
 argv_is "cable present: connects with -wired" "connect Other iPad -wired"
 has    "logs a wired reconnect"           "reconnected Other iPad (wired)"
