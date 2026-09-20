@@ -129,6 +129,16 @@ ncalls "expired pause cannot bypass invalid settings" 0
 rm -f "$SIDECARKEEPER_STATE_DIR/config"
 "$BIN" resume >/dev/null
 
+echo "broken settings symlink"
+mkdir -p "$SIDECARKEEPER_STATE_DIR"
+ln -s "$WORK/missing-settings" "$SIDECARKEEPER_STATE_DIR/config"
+watch new 2
+has "broken settings symlink is reported" "cannot read settings:"
+ncalls "broken settings symlink never connects" 0
+"$BIN" config > "$WORK/config-output"; rc=$?
+if [ "$rc" -eq 1 ]; then ok "config rejects broken settings symlink"; else bad "config rejects broken settings symlink (exit $rc)"; fi
+rm -f "$SIDECARKEEPER_STATE_DIR/config"
+
 watch ok 2
 if grep -qE "lid closed|locked, idle" <<<"$LOG"; then
   if grep -q 'locked, idle' <<<"$LOG"; then status_has "live status reports the locked gate" "watcher: locked"
