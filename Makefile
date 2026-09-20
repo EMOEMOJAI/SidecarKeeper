@@ -1,4 +1,4 @@
-# Local build check (there is no CI: the project only builds on macOS).
+# Build and checks for local development and CI; requires macOS.
 SWIFTC ?= swiftc
 BUILD  ?= build
 

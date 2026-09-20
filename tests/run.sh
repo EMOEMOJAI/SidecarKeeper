@@ -6,7 +6,13 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BIN="${1:-$ROOT/build/sidecar-keeper}"
 TMP="${TMPDIR:-/tmp}"; WORK="$(mktemp -d "${TMP%/}/sk-tests.XXXXXX")"
-trap 'rm -rf "$WORK"' EXIT
+cleanup_leaky_child() {
+  if [ -f "$WORK/leaky-child" ]; then
+    kill -KILL "$(cat "$WORK/leaky-child")" 2>/dev/null || true
+    rm -f "$WORK/leaky-child"
+  fi
+}
+trap 'cleanup_leaky_child; rm -rf "$WORK"' EXIT
 cp "$ROOT/tests/fake-launcher.sh" "$WORK/SidecarLauncher"; chmod +x "$WORK/SidecarLauncher"
 export SIDECARKEEPER_STATE_DIR="$WORK/state"
 # Fake USB bus: the watcher reads this script's output instead of calling ioreg.
@@ -87,7 +93,7 @@ echo leaky > "$WORK/mode"; rm -f "$WORK/log"
 count() { wc -l | tr -d ' '; }
 sleep 3; t1=$(ps -M "$pid" | count); f1=$(lsof -p "$pid" 2>/dev/null | count)
 sleep 4; t2=$(ps -M "$pid" | count); f2=$(lsof -p "$pid" 2>/dev/null | count)
-kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; pkill -f "sleep 20" 2>/dev/null
+kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; cleanup_leaky_child
 LOG="$(cat "$WORK/log")"; CALLS=""
 # File descriptors are the exact signal. The thread pool adds or drops a worker at will, so
 # one thread of drift is noise; the real leak stranded two threads and two descriptors.
@@ -146,6 +152,19 @@ has    "a mistake in the file is reported with its line" "settings file error (l
 ncalls "and the watcher stays idle instead of guessing" 0
 printf 'interval = soon\n' > "$CFG"; watch new 2
 has    "a bad number is reported, not fatal"  "settings file error (line 1: interval must be"
+printf 'device = \xff\n' > "$CFG"; watch new 2
+has    "invalid UTF-8 is reported"         "cannot read settings:"
+ncalls "invalid UTF-8 never connects"      0
+"$BIN" config > "$WORK/config-output"; rc=$?
+if [ "$rc" -eq 1 ]; then ok "config rejects unreadable settings"; else bad "config rejects unreadable settings (exit $rc)"; fi
+printf 'device = Nope\n' > "$CFG"; chmod 000 "$CFG"; watch new 2
+chmod 600 "$CFG"
+has    "unreadable permissions are reported" "cannot read settings:"
+ncalls "unreadable settings never connect" 0
+out="$("$BIN" config)"
+if grep -q '^file settings: --device Nope$' <<<"$out" && grep -q 'Command-line flags override' <<<"$out"; then
+  ok "config describes file settings and flag precedence"
+else bad "config describes file settings and flag precedence"; fi
 rm -f "$CFG"; LOG=""; CALLS=""
 if "$BIN" config --init >/dev/null && [ -s "$CFG" ]; then ok "config --init writes a template"; else bad "config --init writes a template"; fi
 if grep -qvE '^(#.*)?$' "$CFG"; then bad "the template sets nothing by itself"; else ok "the template sets nothing by itself"; fi

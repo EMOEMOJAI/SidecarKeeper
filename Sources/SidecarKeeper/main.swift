@@ -103,7 +103,14 @@ let configTemplate = """
 /// here, so that a mistake is reported with its line number instead of ending the process:
 /// a watcher that exits is restarted by launchd every few seconds.
 func loadConfig() -> (args: [String], error: String?) {
-    guard let text = try? String(contentsOfFile: configFile, encoding: .utf8) else { return ([], nil) }
+    let text: String
+    do { text = try String(contentsOfFile: configFile, encoding: .utf8) }
+    catch {
+        let e = error as NSError
+        // Only an absent file means defaults; unreadable settings must never select another iPad.
+        if e.domain == NSCocoaErrorDomain && e.code == NSFileReadNoSuchFileError { return ([], nil) }
+        return ([], "cannot read settings: \(error.localizedDescription)")
+    }
     var args: [String] = []
     for (n, raw) in text.components(separatedBy: .newlines).enumerated() {
         let line = raw.trimmingCharacters(in: .whitespaces)
@@ -254,7 +261,8 @@ case "config":
     let loaded = loadConfig()
     print("file:   \(configFile)\(FileManager.default.fileExists(atPath: configFile) ? "" : "  (not created; `sidecar-keeper config --init`)")")
     if let e = loaded.error { print("error:  \(e)\n        the watcher stays idle until this is fixed"); exit(1) }
-    print("in use: \(loaded.args.isEmpty ? "defaults" : loaded.args.joined(separator: " "))")
+    print("file settings: \(loaded.args.isEmpty ? "defaults" : loaded.args.joined(separator: " "))")
+    print("Command-line flags override these settings; restart the watcher after editing.")
     exit(0)
 case "status":
     let loaded = loadConfig()

@@ -8,7 +8,11 @@ case "$1" in
   devices)
     echo probe >> "$dir/probes"
     if [ "$mode" = hangdevices ]; then sleep 60; fi
-    if [ "$mode" = leaky ]; then ( trap '' TERM; sleep 20 ) & wait; fi   # a child that keeps the pipe open
+    if [ "$mode" = leaky ]; then
+      ( trap '' TERM; exec sleep 20 ) & # a child that keeps the pipe open
+      echo "$!" > "$dir/leaky-child"
+      wait
+    fi
     if [ "$mode" = none ]; then echo "No sidecar capable devices detected"; exit 2; fi
     printf 'Other iPad\nJoe\xe2\x80\x99s iPad\n' ;;
   connect)
