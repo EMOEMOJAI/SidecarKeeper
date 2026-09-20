@@ -15,7 +15,7 @@ is no Swift package, no Xcode project and no third-party dependency.
 | `launchd/com.sidecarkeeper.plist.template` | LaunchAgent template, filled in by `install.sh` |
 | `tests/run.sh`, `tests/fake-launcher.sh` | Behaviour tests driven by a fake SidecarLauncher |
 | `scripts/package.sh`, `.github/workflows/release.yml` | Release bundle with prebuilt universal binaries; a `v*` tag builds, verifies and publishes it |
-| `docs/manual/` | The full documentation. The README is deliberately short and links here |
+| `docs/guide.md` | The user guide. The README is deliberately short and links here |
 | `assets/`, `docs/` | Icons and the project website. `assets/render.sh` regenerates the PNGs |
 
 ## Commands
@@ -62,10 +62,10 @@ make check   # build + test + bash -n + shellcheck + plist lint. Run before ever
 - A locked or sleeping iPad still appears in `devices` but connect fails with -203.
 - `CGDisplayIsAsleep` was found unreliable as a display-off signal, so the watcher relies on
   `NSWorkspace` sleep and wake notifications instead.
-- A wired (`-wired`) session does not recover after an unplug; see `docs/manual/wired-mode.md`.
+- A wired (`-wired`) session does not recover after an unplug; see `docs/guide.md#wired-mode`.
 
 ## Style
 
 Match the surrounding code: compact Swift, comments that explain why rather than what.
-README and manual prose is plain and factual, and every claim should be something that was
-tested. The README stays short, for a first-time visitor; detail belongs in `docs/manual/`.
+README and guide prose is plain and factual, and every claim should be something that was
+tested. The README stays short, for a first-time visitor; detail belongs in `docs/guide.md`.

@@ -176,7 +176,7 @@ if [ "$WIRED" -eq 1 ]; then
     echo "    iPad detected on USB"
   else
     echo "warning: no iPad detected on USB. In wired mode the watcher stays idle until the cable" >&2
-    echo "         is plugged in. If it is plugged in now, see https://github.com/EMOEMOJAI/SidecarKeeper/blob/main/docs/manual/wired-mode.md" >&2
+    echo "         is plugged in. If it is plugged in now, see https://github.com/EMOEMOJAI/SidecarKeeper/blob/main/docs/guide.md#wired-mode" >&2
   fi
 fi
 
