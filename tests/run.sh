@@ -6,7 +6,13 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BIN="${1:-$ROOT/build/sidecar-keeper}"
 TMP="${TMPDIR:-/tmp}"; WORK="$(mktemp -d "${TMP%/}/sk-tests.XXXXXX")"
-trap 'rm -rf "$WORK"' EXIT
+cleanup_leaky_child() {
+  if [ -f "$WORK/leaky-child" ]; then
+    kill -KILL "$(cat "$WORK/leaky-child")" 2>/dev/null || true
+    rm -f "$WORK/leaky-child"
+  fi
+}
+trap 'cleanup_leaky_child; rm -rf "$WORK"' EXIT
 cp "$ROOT/tests/fake-launcher.sh" "$WORK/SidecarLauncher"; chmod +x "$WORK/SidecarLauncher"
 export SIDECARKEEPER_STATE_DIR="$WORK/state"
 # Fake USB bus: the watcher reads this script's output instead of calling ioreg.
@@ -32,11 +38,22 @@ has()  { if grep -qF -- "$2" <<<"$LOG"; then ok "$1"; else bad "$1 (log lacks: $
 hasnt(){ if grep -qF -- "$2" <<<"$LOG"; then bad "$1 (log has: $2)"; else ok "$1"; fi; }
 ncalls(){ local n; n=$(grep -c . <<<"$CALLS"); if [ "$n" -eq "$2" ]; then ok "$1"; else bad "$1 (expected $2 connect calls, got $n)"; fi; }
 
+echo "broken settings symlink"
+mkdir -p "$SIDECARKEEPER_STATE_DIR"
+ln -s "$WORK/missing-settings" "$SIDECARKEEPER_STATE_DIR/config"
+watch new 2
+has "broken settings symlink is reported" "cannot read settings:"
+ncalls "broken settings symlink never connects" 0
+"$BIN" config > "$WORK/config-output"; rc=$?
+if [ "$rc" -eq 1 ]; then ok "config rejects broken settings symlink"; else bad "config rejects broken settings symlink (exit $rc)"; fi
+rm -f "$SIDECARKEEPER_STATE_DIR/config"
+
 watch ok 2
 if grep -qE "lid closed|locked, idle" <<<"$LOG"; then
   # CI sets SK_TESTS_NO_SKIP so that a skipped run can never look like a pass.
   if [ -n "${SK_TESTS_NO_SKIP:-}" ]; then echo "FAIL: watcher is idle (lid closed or locked) and SK_TESTS_NO_SKIP is set"; exit 1; fi
-  echo "SKIP: the lid is closed or the session is locked, the watcher is correctly idle."; exit 0
+  echo "$PASS passed, $FAIL failed; remaining tests SKIP: lid closed or session locked."
+  [ "$FAIL" -eq 0 ]; exit $?
 fi
 
 echo "already connected"
@@ -82,16 +99,18 @@ if [ "$n" -eq 1 ]; then ok "a hung devices call backs off instead of blocking ev
 echo "no leak when a launcher child keeps the pipe open"
 echo leaky > "$WORK/mode"; rm -f "$WORK/log"
 "$BIN" --launcher "$WORK/SidecarLauncher" --log "$WORK/log" --interval 1 --timeout 1 --settle 0 & pid=$!
-# Thread and fd counts before and after the timed-out call is abandoned: the output reader
-# must not strand a thread or a descriptor waiting for an EOF that never comes.
+# Once the call times out, pause polling so an in-flight ioreg probe cannot look like a leak.
+# The child still holds stdout open, but the watcher must have closed its end of that pipe.
 count() { wc -l | tr -d ' '; }
-sleep 3; t1=$(ps -M "$pid" | count); f1=$(lsof -p "$pid" 2>/dev/null | count)
-sleep 4; t2=$(ps -M "$pid" | count); f2=$(lsof -p "$pid" 2>/dev/null | count)
-kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; pkill -f "sleep 20" 2>/dev/null
+pipe_count() { lsof -a -p "$pid" -d '^0,1,2' -F t 2>/dev/null | grep -c '^tPIPE$'; }
+sleep 3; "$BIN" pause >/dev/null; sleep 2
+t1=$(ps -M "$pid" | count); f1=$(pipe_count)
+sleep 4; t2=$(ps -M "$pid" | count); f2=$(pipe_count)
+kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; cleanup_leaky_child
+"$BIN" resume >/dev/null
 LOG="$(cat "$WORK/log")"; CALLS=""
-# File descriptors are the exact signal. The thread pool adds or drops a worker at will, so
-# one thread of drift is noise; the real leak stranded two threads and two descriptors.
-if [ "$f2" -le "$f1" ] && [ "$t2" -le $((t1 + 1)) ]; then ok "threads $t1->$t2, fds $f1->$f2"; else bad "threads $t1->$t2, fds $f1->$f2 grew"; fi
+# Ignore inherited stdin/stdout/stderr. The thread pool may add or drop one worker.
+if [ "$f1" -eq 0 ] && [ "$f2" -eq 0 ] && [ "$t2" -le $((t1 + 1)) ]; then ok "threads $t1->$t2, child pipes $f1->$f2"; else bad "threads $t1->$t2, child pipes $f1->$f2 leaked"; fi
 
 echo "missing launcher"
 echo ok > "$WORK/mode"; rm -f "$WORK/log"
@@ -146,6 +165,19 @@ has    "a mistake in the file is reported with its line" "settings file error (l
 ncalls "and the watcher stays idle instead of guessing" 0
 printf 'interval = soon\n' > "$CFG"; watch new 2
 has    "a bad number is reported, not fatal"  "settings file error (line 1: interval must be"
+printf 'device = \xff\n' > "$CFG"; watch new 2
+has    "invalid UTF-8 is reported"         "cannot read settings:"
+ncalls "invalid UTF-8 never connects"      0
+"$BIN" config > "$WORK/config-output"; rc=$?
+if [ "$rc" -eq 1 ]; then ok "config rejects unreadable settings"; else bad "config rejects unreadable settings (exit $rc)"; fi
+printf 'device = Nope\n' > "$CFG"; chmod 000 "$CFG"; watch new 2
+chmod 600 "$CFG"
+has    "unreadable permissions are reported" "cannot read settings:"
+ncalls "unreadable settings never connect" 0
+out="$("$BIN" config)"
+if grep -q '^file settings: --device Nope$' <<<"$out" && grep -q 'Command-line flags override' <<<"$out"; then
+  ok "config describes file settings and flag precedence"
+else bad "config describes file settings and flag precedence"; fi
 rm -f "$CFG"; LOG=""; CALLS=""
 if "$BIN" config --init >/dev/null && [ -s "$CFG" ]; then ok "config --init writes a template"; else bad "config --init writes a template"; fi
 if grep -qvE '^(#.*)?$' "$CFG"; then bad "the template sets nothing by itself"; else ok "the template sets nothing by itself"; fi

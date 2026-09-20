@@ -50,7 +50,8 @@ interval = 15
 wired = false
 ```
 
-Use one `name = value` per line; values may be quoted, and `#` starts a comment.
+Use one `name = value` per line; values may be quoted. Lines beginning with `#`
+(after optional whitespace) are comments. Inline comments are not supported.
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
