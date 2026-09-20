@@ -202,16 +202,18 @@ if [ "$n" -eq 1 ]; then ok "a hung devices call backs off instead of blocking ev
 echo "no leak when a launcher child keeps the pipe open"
 echo leaky > "$WORK/mode"; rm -f "$WORK/log"
 "$BIN" --launcher "$WORK/SidecarLauncher" --log "$WORK/log" --interval 1 --timeout 1 --settle 0 & pid=$!
-# Thread and fd counts before and after the timed-out call is abandoned: the output reader
-# must not strand a thread or a descriptor waiting for an EOF that never comes.
+# Once the call times out, pause polling so an in-flight ioreg probe cannot look like a leak.
+# The child still holds stdout open, but the watcher must have closed its end of that pipe.
 count() { wc -l | tr -d ' '; }
-sleep 3; t1=$(ps -M "$pid" | count); f1=$(lsof -p "$pid" 2>/dev/null | count)
-sleep 4; t2=$(ps -M "$pid" | count); f2=$(lsof -p "$pid" 2>/dev/null | count)
+pipe_count() { lsof -a -p "$pid" -d '^0,1,2' -F t 2>/dev/null | grep -c '^tPIPE$'; }
+sleep 3; "$BIN" pause >/dev/null; sleep 2
+t1=$(ps -M "$pid" | count); f1=$(pipe_count)
+sleep 4; t2=$(ps -M "$pid" | count); f2=$(pipe_count)
 kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; cleanup_leaky_child
+"$BIN" resume >/dev/null
 LOG="$(cat "$WORK/log")"; CALLS=""
-# File descriptors are the exact signal. The thread pool adds or drops a worker at will, so
-# one thread of drift is noise; the real leak stranded two threads and two descriptors.
-if [ "$f2" -le "$f1" ] && [ "$t2" -le $((t1 + 1)) ]; then ok "threads $t1->$t2, fds $f1->$f2"; else bad "threads $t1->$t2, fds $f1->$f2 grew"; fi
+# Ignore inherited stdin/stdout/stderr. The thread pool may add or drop one worker.
+if [ "$f1" -eq 0 ] && [ "$f2" -eq 0 ] && [ "$t2" -le $((t1 + 1)) ]; then ok "threads $t1->$t2, child pipes $f1->$f2"; else bad "threads $t1->$t2, child pipes $f1->$f2 leaked"; fi
 
 echo "missing launcher"
 echo ok > "$WORK/mode"; rm -f "$WORK/log"
