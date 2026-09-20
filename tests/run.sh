@@ -28,7 +28,14 @@ watch() {
   local mode="$1" secs="$2"; shift 2
   echo "$mode" > "$WORK/mode"; rm -f "$WORK/calls" "$WORK/argv" "$WORK/probes" "$WORK/disconnected" "$WORK/log"
   "$BIN" --launcher "$WORK/SidecarLauncher" --log "$WORK/log" --interval 1 "$@" &
-  local pid=$!; sleep "$secs"; STATUS="$(status)"; kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null
+  local pid=$! attempt; sleep "$secs"
+  # A poll may be in flight at the sampling instant; allow its bounded fake probe to finish.
+  for ((attempt=0; attempt<20; attempt++)); do
+    STATUS="$(status)"
+    if ! grep -qE '^watcher: (checking device availability|connecting |disconnecting )' <<<"$STATUS"; then break; fi
+    sleep 0.1
+  done
+  kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null
   LOG="$(cat "$WORK/log" 2>/dev/null)"; CALLS="$(cat "$WORK/calls" 2>/dev/null)"; ARGV="$(cat "$WORK/argv" 2>/dev/null)"
 }
 # The launcher's first commands must be exactly $2 (later ticks may repeat the connect).
