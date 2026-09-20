@@ -108,7 +108,8 @@ func loadConfig() -> (args: [String], error: String?) {
     catch {
         let e = error as NSError
         // Only an absent file means defaults; unreadable settings must never select another iPad.
-        if e.domain == NSCocoaErrorDomain && e.code == NSFileReadNoSuchFileError { return ([], nil) }
+        let isLink = (try? FileManager.default.destinationOfSymbolicLink(atPath: configFile)) != nil
+        if e.domain == NSCocoaErrorDomain && e.code == NSFileReadNoSuchFileError && !isLink { return ([], nil) }
         return ([], "cannot read settings: \(error.localizedDescription)")
     }
     var args: [String] = []

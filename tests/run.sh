@@ -38,11 +38,22 @@ has()  { if grep -qF -- "$2" <<<"$LOG"; then ok "$1"; else bad "$1 (log lacks: $
 hasnt(){ if grep -qF -- "$2" <<<"$LOG"; then bad "$1 (log has: $2)"; else ok "$1"; fi; }
 ncalls(){ local n; n=$(grep -c . <<<"$CALLS"); if [ "$n" -eq "$2" ]; then ok "$1"; else bad "$1 (expected $2 connect calls, got $n)"; fi; }
 
+echo "broken settings symlink"
+mkdir -p "$SIDECARKEEPER_STATE_DIR"
+ln -s "$WORK/missing-settings" "$SIDECARKEEPER_STATE_DIR/config"
+watch new 2
+has "broken settings symlink is reported" "cannot read settings:"
+ncalls "broken settings symlink never connects" 0
+"$BIN" config > "$WORK/config-output"; rc=$?
+if [ "$rc" -eq 1 ]; then ok "config rejects broken settings symlink"; else bad "config rejects broken settings symlink (exit $rc)"; fi
+rm -f "$SIDECARKEEPER_STATE_DIR/config"
+
 watch ok 2
 if grep -qE "lid closed|locked, idle" <<<"$LOG"; then
   # CI sets SK_TESTS_NO_SKIP so that a skipped run can never look like a pass.
   if [ -n "${SK_TESTS_NO_SKIP:-}" ]; then echo "FAIL: watcher is idle (lid closed or locked) and SK_TESTS_NO_SKIP is set"; exit 1; fi
-  echo "SKIP: the lid is closed or the session is locked, the watcher is correctly idle."; exit 0
+  echo "$PASS passed, $FAIL failed; remaining tests SKIP: lid closed or session locked."
+  [ "$FAIL" -eq 0 ]; exit $?
 fi
 
 echo "already connected"
