@@ -76,12 +76,28 @@ printf 'broken expiry\n' > "$SIDECARKEEPER_STATE_DIR/paused"
 watch new 1
 status_has "damaged pause remains paused" "watcher: paused"
 ncalls "damaged pause never connects" 0
+rm -f "$SIDECARKEEPER_STATE_DIR/paused"
+ln -s "$WORK/missing-pause" "$SIDECARKEEPER_STATE_DIR/paused"
+watch new 1
+status_has "broken pause symlink remains paused" "watcher: paused"
+ncalls "broken pause symlink never connects" 0
+"$BIN" resume >/dev/null; "$BIN" pause >/dev/null
 
 # A fresh PID alone is insufficient: reject expired snapshots and a mismatched process start.
 echo new > "$WORK/mode"
 "$BIN" --launcher "$WORK/SidecarLauncher" --log "$WORK/log" --interval 60 & pid=$!
 sleep 1
 cp "$SIDECARKEEPER_STATE_DIR/status.json" "$WORK/snapshot"
+python3 - "$SIDECARKEEPER_STATE_DIR/status.json" <<'PY'
+import json, pathlib, sys
+p = pathlib.Path(sys.argv[1]); data = json.loads(p.read_text())
+data['retryAt'] = 1e300
+p.write_text(json.dumps(data))
+PY
+STATUS="$(status)"; rc=$?
+if [ "$rc" -eq 0 ]; then ok "out-of-range status date does not crash"; else bad "out-of-range status date does not crash"; fi
+status_has "out-of-range status date is unavailable" "watcher: unavailable"
+cp "$WORK/snapshot" "$SIDECARKEEPER_STATE_DIR/status.json"
 python3 - "$SIDECARKEEPER_STATE_DIR/status.json" <<'PY'
 import json, pathlib, sys
 p = pathlib.Path(sys.argv[1]); data = json.loads(p.read_text())

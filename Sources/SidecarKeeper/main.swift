@@ -13,7 +13,7 @@
 import AppKit
 import Foundation
 
-let version = "1.3.1"
+let version = "1.4.0"
 // The standard installer's LaunchAgent, then the labels `brew services` uses (new and old).
 // SIDECARKEEPER_AGENT_LABELS overrides the list, for tests.
 let agentLabels = ProcessInfo.processInfo.environment["SIDECARKEEPER_AGENT_LABELS"]?
@@ -51,12 +51,14 @@ func pauseState() -> Pause {
     do {
         let text = try String(contentsOfFile: pauseFile, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
         // Empty flags from older versions, or damaged flags, remain paused until explicitly resumed.
-        guard let expiry = TimeInterval(text), expiry.isFinite, expiry > 0 else { return .indefinite }
+        guard let expiry = TimeInterval(text), expiry.isFinite, expiry > 0,
+              expiry <= Date.distantFuture.timeIntervalSince1970 else { return .indefinite }
         let date = Date(timeIntervalSince1970: expiry)
         return date > Date() ? .until(date) : .off
     } catch {
         let e = error as NSError
-        return e.domain == NSCocoaErrorDomain && e.code == NSFileReadNoSuchFileError ? .off : .indefinite
+        let isLink = (try? fm.destinationOfSymbolicLink(atPath: pauseFile)) != nil
+        return e.domain == NSCocoaErrorDomain && e.code == NSFileReadNoSuchFileError && !isLink ? .off : .indefinite
     }
 }
 func isPaused() -> Bool { pauseState().active }
@@ -76,10 +78,14 @@ struct WatcherStatus: Codable {
 let statusFile = stateDir + "/status.json"
 func readStatus() -> WatcherStatus? {
     guard let data = try? Data(contentsOf: URL(fileURLWithPath: statusFile)) else { return nil }
-    return try? JSONDecoder().decode(WatcherStatus.self, from: data)
+    guard let status = try? JSONDecoder().decode(WatcherStatus.self, from: data) else { return nil }
+    let dates = [status.updated, status.freshUntil] + [status.retryAt, status.lastReconnect].compactMap { $0 }
+    // Codable accepts enormous finite dates; reject damaged records before formatting/counting down.
+    guard dates.allSatisfy({ $0 >= Date.distantPast && $0 <= Date.distantFuture }) else { return nil }
+    return status
 }
 func processStart(_ pid: Int32) -> String {
-    run("/bin/ps", ["-p", String(pid), "-o", "lstart="], timeout: 2)
+    run("/usr/bin/env", ["LC_ALL=C", "/bin/ps", "-p", String(pid), "-o", "lstart="], timeout: 2)
 }
 func timestamp(_ date: Date) -> String {
     let formatter = DateFormatter(); formatter.dateFormat = "yyyy-MM-dd HH:mm:ss Z"
