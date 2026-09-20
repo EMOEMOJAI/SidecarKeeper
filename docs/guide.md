@@ -104,6 +104,17 @@ To return to automatic transport, set `wired = false` and restart. If installed 
 Start with `sidecar-keeper status` and `~/Library/Logs/sidecar-keeper.log`. If the command
 is not on your `PATH` after a standard install, use `~/.sidecarkeeper/bin/sidecar-keeper`.
 
+Status shows the watcher's latest observed state, such as paused, locked, waiting for a
+USB cable, or device not reachable. During backoff it shows how long until a retry is
+eligible; the next attempt still waits for a poll and all connection gates. It also shows
+the last successful reconnection recorded by the watcher, including its date and iPad name.
+An already-connected session does not change that timestamp. The record survives watcher
+restarts and is removed by the standard uninstaller.
+
+These observations update on watcher checks, not continuously. Stopped watchers and
+expired observations are marked stale; a missing or unreadable record is marked unavailable.
+An older watcher must be restarted after upgrading to produce live status.
+
 | Status or log message | What to do |
 | --- | --- |
 | `ok` / `reconnected` | Nothing; Sidecar is connected |
@@ -119,6 +130,14 @@ is not on your `PATH` after a standard install, use `~/.sidecarkeeper/bin/sideca
 | `cannot run launcher` | Run the installer again |
 
 Use `pause` before disconnecting Sidecar intentionally; otherwise the watcher reconnects.
+To pause temporarily, use `sidecar-keeper pause --for 1h`. Durations accept `s`, `m`, `h`
+or `d` (for example, `30s`, `15m`, `1.5h` or `1d`), from one second to 365 days.
+The expiry survives watcher restarts and is shown by `status`. After expiry, reconnection
+waits for the next eligible check, including any existing failure backoff. A locked Mac,
+closed lid, missing device or missing cable in wired mode still prevents reconnection.
+Run plain `pause` to replace a timed pause with an indefinite one, or `resume` to end
+either kind early. These commands do not interrupt a launcher call already in progress.
+
 Failed attempts can still notify, but retries back off from 30 seconds to five minutes.
 The watcher manages one iPad, and cannot keep Sidecar running with the built-in display off.
 If a macOS update breaks connectivity, check for a newer release.

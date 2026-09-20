@@ -41,16 +41,55 @@ let stateDir = stateDirOverride ?? home + "/Library/Application Support/SidecarK
 let pauseFile = stateDir + "/paused"
 let legacyPauseFile = home + "/.sidecarkeeper/paused" // where 1.2 and earlier kept it
 let configFile = stateDir + "/config"
-func isPaused() -> Bool {
-    let fm = FileManager.default
-    return fm.fileExists(atPath: pauseFile) || (stateDirOverride == nil && fm.fileExists(atPath: legacyPauseFile))
+enum Pause {
+    case off, indefinite, until(Date)
+    var active: Bool { if case .off = self { return false }; return true }
 }
+func pauseState() -> Pause {
+    let fm = FileManager.default
+    if stateDirOverride == nil && fm.fileExists(atPath: legacyPauseFile) { return .indefinite }
+    do {
+        let text = try String(contentsOfFile: pauseFile, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
+        // Empty flags from older versions, or damaged flags, remain paused until explicitly resumed.
+        guard let expiry = TimeInterval(text), expiry.isFinite, expiry > 0 else { return .indefinite }
+        let date = Date(timeIntervalSince1970: expiry)
+        return date > Date() ? .until(date) : .off
+    } catch {
+        let e = error as NSError
+        return e.domain == NSCocoaErrorDomain && e.code == NSFileReadNoSuchFileError ? .off : .indefinite
+    }
+}
+func isPaused() -> Bool { pauseState().active }
 let defaultLog = home + "/Library/Logs/sidecar-keeper.log"
+
+struct WatcherStatus: Codable {
+    var pid: Int32
+    var processStart: String
+    var updated: Date
+    var freshUntil: Date
+    var state: String
+    var retryAt: Date?
+    var lastReconnect: Date?
+    var lastDevice: String?
+    var logPath: String
+}
+let statusFile = stateDir + "/status.json"
+func readStatus() -> WatcherStatus? {
+    guard let data = try? Data(contentsOf: URL(fileURLWithPath: statusFile)) else { return nil }
+    return try? JSONDecoder().decode(WatcherStatus.self, from: data)
+}
+func processStart(_ pid: Int32) -> String {
+    run("/bin/ps", ["-p", String(pid), "-o", "lstart="], timeout: 2)
+}
+func timestamp(_ date: Date) -> String {
+    let formatter = DateFormatter(); formatter.dateFormat = "yyyy-MM-dd HH:mm:ss Z"
+    return formatter.string(from: date)
+}
 
 func usage() -> String {
     """
     usage: sidecar-keeper [run] [options]   run the watcher (what the LaunchAgent does)
-           sidecar-keeper pause             stop reconnecting (e.g. you disconnected on purpose)
+           sidecar-keeper pause [--for 1h]  pause indefinitely, or for a duration (s, m, h, d)
            sidecar-keeper resume            start reconnecting again
            sidecar-keeper status [--log PATH]
            sidecar-keeper config [--init]   show the settings file, or create a commented one
@@ -240,12 +279,38 @@ let command = (argv.first.map { !$0.hasPrefix("-") } ?? false) ? argv.removeFirs
 switch command {
 case "run": break
 case "pause":
-    try? FileManager.default.createDirectory(atPath: stateDir, withIntermediateDirectories: true)
-    guard FileManager.default.createFile(atPath: pauseFile, contents: nil) else { die("cannot write \(pauseFile)") }
-    print("paused: SidecarKeeper will not reconnect until `sidecar-keeper resume`"); exit(0)
+    var expiry: Date?
+    if !argv.isEmpty {
+        guard argv.count == 2, argv[0] == "--for", let unit = argv[1].last,
+              let multiplier = ["s": 1.0, "m": 60.0, "h": 3600.0, "d": 86400.0][String(unit)],
+              let value = Double(argv[1].dropLast()), value.isFinite,
+              value * multiplier >= 1, value * multiplier <= 31_536_000 else {
+            die("usage: sidecar-keeper pause [--for DURATION] (e.g. 30s, 15m, 1h, 1d; 1 second to 365 days)")
+        }
+        expiry = Date().addingTimeInterval(value * multiplier)
+    }
+    do {
+        try FileManager.default.createDirectory(atPath: stateDir, withIntermediateDirectories: true)
+        let text = expiry.map { String($0.timeIntervalSince1970) } ?? ""
+        try text.write(toFile: pauseFile, atomically: true, encoding: .utf8)
+        if stateDirOverride == nil && FileManager.default.fileExists(atPath: legacyPauseFile) {
+            try FileManager.default.removeItem(atPath: legacyPauseFile)
+        }
+    } catch { die("cannot set pause: \(error.localizedDescription)") }
+    if let expiry { print("paused until \(timestamp(expiry)); reconnecting on the next eligible check after expiry") }
+    else { print("paused: SidecarKeeper will not reconnect until `sidecar-keeper resume`") }
+    exit(0)
 case "resume":
-    try? FileManager.default.removeItem(atPath: pauseFile)
-    if stateDirOverride == nil { try? FileManager.default.removeItem(atPath: legacyPauseFile) }
+    guard argv.isEmpty else { die("usage: sidecar-keeper resume") }
+    for path in [pauseFile] + (stateDirOverride == nil ? [legacyPauseFile] : []) {
+        do { try FileManager.default.removeItem(atPath: path) }
+        catch {
+            let e = error as NSError
+            if e.domain != NSCocoaErrorDomain || e.code != NSFileNoSuchFileError {
+                die("cannot resume: \(error.localizedDescription)")
+            }
+        }
+    }
     print("resumed: reconnecting on the next tick"); exit(0)
 case "config":
     if argv == ["--init"] {
@@ -266,7 +331,7 @@ case "config":
     exit(0)
 case "status":
     let loaded = loadConfig()
-    let cfg = parseOptions((loaded.error == nil ? loaded.args : []) + argv)
+    var cfg = parseOptions((loaded.error == nil ? loaded.args : []) + argv)
     // Report every agent that is loaded: two at once means two watchers competing.
     var found: [String] = []
     for label in agentLabels {
@@ -279,7 +344,30 @@ case "status":
     }
     print("agent:  \(found.isEmpty ? "not loaded" : found.joined(separator: ", "))")
     if found.count > 1 { print("        warning: more than one watcher is loaded; stop one of them") }
-    print("paused: \(isPaused() ? "yes" : "no")")
+    switch pauseState() {
+    case .off: print("paused: no")
+    case .indefinite: print("paused: yes (until resumed)")
+    case .until(let date): print("paused: yes (until \(timestamp(date)))")
+    }
+    if let status = readStatus() {
+        // PID plus process start distinguishes a stopped watcher from a reused PID.
+        let live = status.pid > 0 && Date() <= status.freshUntil && !status.processStart.isEmpty
+            && kill(status.pid, 0) == 0 && processStart(status.pid) == status.processStart
+        if live {
+            var detail = status.state
+            if let retry = status.retryAt {
+                let seconds = max(0, ceil(retry.timeIntervalSinceNow))
+                detail += seconds > 0 ? " (eligible in \(Int(seconds))s)" : " (eligible; awaiting next check)"
+            }
+            print("watcher: \(detail) (observed \(timestamp(status.updated)))")
+            if !argv.contains("--log") { cfg.logPath = status.logPath }
+        } else {
+            print("watcher: stale; last observed \(status.state) at \(timestamp(status.updated))")
+        }
+        if let date = status.lastReconnect {
+            print("last reconnect: \(timestamp(date))\(status.lastDevice.map { " (\($0))" } ?? "")")
+        } else { print("last reconnect: none recorded") }
+    } else { print("watcher: unavailable (no readable status yet)") }
     if let e = loaded.error { print("config: ERROR in \(configFile): \(e)") }
     else if !loaded.args.isEmpty { print("config: \(loaded.args.joined(separator: " "))") }
     print("usb:    \(usbAttached(cfg.usbMatch) ? "\(cfg.usbMatch) attached by cable" : "no \(cfg.usbMatch) on USB") (only matters with --wired)")
@@ -306,6 +394,26 @@ var nextAllowed = Date()
 var cableWasAbsent = false // wired mode: the cable was seen unplugged since the last good connect
 let fmt = DateFormatter(); fmt.dateFormat = "yyyy-MM-dd HH:mm:ss"
 let maxLogBytes = 1_000_000
+let previousStatus = readStatus()
+var watcherStatus = WatcherStatus(pid: getpid(), processStart: processStart(getpid()), updated: Date(),
+    freshUntil: Date(), state: "starting", lastReconnect: previousStatus?.lastReconnect,
+    lastDevice: previousStatus?.lastDevice, logPath: cfg.logPath)
+var statusWriteFailed = false
+var waitingReason = "waiting to retry"
+
+func report(_ state: String, retryAt: Date? = nil) {
+    watcherStatus.state = state; watcherStatus.retryAt = retryAt; watcherStatus.updated = Date()
+    // Allow for the next poll and bounded USB/lid/launcher probes, including while asleep.
+    watcherStatus.freshUntil = Date().addingTimeInterval(max(cfg.interval + 30, cfg.timeout + 10))
+    do {
+        try FileManager.default.createDirectory(atPath: stateDir, withIntermediateDirectories: true)
+        try JSONEncoder().encode(watcherStatus).write(to: URL(fileURLWithPath: statusFile), options: .atomic)
+        statusWriteFailed = false
+    } catch {
+        if !statusWriteFailed { log("cannot write live status: \(error.localizedDescription)", always: true) }
+        statusWriteFailed = true
+    }
+}
 
 // MARK: - Helpers
 
@@ -361,43 +469,52 @@ func tick() {
     let cabled = !cfg.wired || usbAttached(cfg.usbMatch)
     if !cabled { cableWasAbsent = true }
     // A broken settings file must never turn into a guess about which iPad to connect.
-    if let e = loadedConfig.error { log("settings file error (\(e)), idle until fixed: \(configFile)"); return }
-    if isPaused() { log("paused, idle"); return }
-    guard screensAwake else { log("screen off, idle"); return }
+    if let e = loadedConfig.error { report("settings file error"); log("settings file error (\(e)), idle until fixed: \(configFile)"); return }
+    if isPaused() { report("paused"); log("paused, idle"); return }
+    guard screensAwake else { report("screen off"); log("screen off, idle"); return }
     // The lock notifications are best-effort and only report changes, so also ask the session.
-    guard unlocked && !sessionLocked() else { log("locked, idle"); return }
-    if lidClosed() { log("lid closed, idle"); return }
-    guard cabled else { log("wired mode: no \(cfg.usbMatch) on USB, idle"); return }
-    guard Date() >= nextAllowed else { return }
+    guard unlocked && !sessionLocked() else { report("locked"); log("locked, idle"); return }
+    if lidClosed() { report("lid closed"); log("lid closed, idle"); return }
+    guard cabled else { report("waiting for USB cable"); log("wired mode: no \(cfg.usbMatch) on USB, idle"); return }
+    guard Date() >= nextAllowed else { report(waitingReason, retryAt: nextAllowed); return }
 
+    report("checking device availability")
     let device: String
     switch probeDevice() {
     case .found(let d): device = d
-    case .missing: log("\(cfg.device ?? "device") not reachable, idle"); return
+    case .missing: report("\(cfg.device ?? "device") not reachable"); log("\(cfg.device ?? "device") not reachable, idle"); return
     case .launcherError(let e):
         // Back off here too: a launcher that hangs would otherwise block every single tick.
         backoff = min(max(backoff * 2, 30), 300); nextAllowed = Date().addingTimeInterval(backoff)
+        waitingReason = "waiting to retry launcher"; report(waitingReason, retryAt: nextAllowed)
         log("cannot run launcher \(cfg.launcher): \(e)"); return
     }
 
     let connectArgs = ["connect", device] + (cfg.wired ? ["-wired"] : [])
+    report("connecting \(device)")
     var out = run(cfg.launcher, connectArgs, timeout: cfg.timeout)
     if cfg.wired && cableWasAbsent && out.contains("AlreadyInUse") {
         // A wired session does not survive an unplug and does not recover on replug: macOS still
         // reports it as in use. Now that the cable is back, end it and start a fresh one.
         log("cable is back, restarting the wired session", always: true)
+        report("disconnecting stale wired session")
         _ = run(cfg.launcher, ["disconnect", device], timeout: cfg.timeout)
+        report("connecting \(device)")
         out = run(cfg.launcher, connectArgs, timeout: cfg.timeout)
     }
     if out.split(separator: "\n").contains("connected") {
         log("reconnected \(device)\(cfg.wired ? " (wired)" : "")", always: true)
         backoff = 15; nextAllowed = Date(); cableWasAbsent = false
+        watcherStatus.lastReconnect = Date(); watcherStatus.lastDevice = device
+        report("connected to \(device)")
     } else if out.contains("AlreadyInUse") {
         log("ok"); backoff = 15; nextAllowed = Date(); cableWasAbsent = false
+        report("connected to \(device)")
     } else {
         // -500/-501 = virtual display busy/failed: display state is in flux, wait longer.
         backoff = out.contains("VirtualDisplay") ? 300 : min(max(backoff * 2, 30), 300)
         nextAllowed = Date().addingTimeInterval(backoff)
+        waitingReason = "waiting to retry connection"; report(waitingReason, retryAt: nextAllowed)
         let hint = out.contains("WiFiNotEnabled") ? " [is the iPad unlocked?]" : ""
         log("fail: \(out)\(hint) (retry in \(Int(backoff))s)")
     }
@@ -405,6 +522,7 @@ func tick() {
 
 func resume(_ why: String) {
     log(why, always: true); backoff = 15; nextAllowed = Date().addingTimeInterval(cfg.settle)
+    waitingReason = "settling after wake/unlock"
     DispatchQueue.main.asyncAfter(deadline: .now() + cfg.settle + 1) { tick() }
 }
 

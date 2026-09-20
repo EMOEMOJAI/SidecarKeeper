@@ -52,7 +52,7 @@ main() {
   fi
   # The pause flag lives in the watcher's state directory, which is independent of --prefix.
   STATE="$HOME/Library/Application Support/SidecarKeeper"
-  rm -f "$STATE/paused" "$HOME/.sidecarkeeper/paused" 2>/dev/null || true
+  rm -f "$STATE/paused" "$STATE/status.json" "$HOME/.sidecarkeeper/paused" 2>/dev/null || true
   if [ "$PURGE_SETTINGS" -eq 1 ]; then
     echo "==> Removing settings"; rm -f "$STATE/config"; rmdir "$STATE" 2>/dev/null || true
   elif [ -f "$STATE/config" ]; then
